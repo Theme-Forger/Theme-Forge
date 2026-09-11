@@ -1,0 +1,119 @@
+Theme Forge — Claude Code Plugin
+Copyright 2026 Theme Forge Contributors
+
+This software contains content adapted or ported from the following projects:
+
+───────────────────────────────────────────────────────────────────────────────
+impeccable
+https://github.com/pbakaus/impeccable
+Copyright © impeccable contributors
+Apache License 2.0 — https://www.apache.org/licenses/LICENSE-2.0
+
+Adapted into:
+  knowledge/13-anti-patterns.md  — full 64-rule anti-pattern catalog derived
+                                   from impeccable's 59-rule detection set
+  scripts/tf_slop.py             — rule categories, severity model, and 5 of
+                                   the stdlib fallback checks (rules 1–5)
+
+Use of this content is subject to the Apache License 2.0. A copy of the
+license is available at the URL above.
+
+───────────────────────────────────────────────────────────────────────────────
+emilkowalski/skills
+https://github.com/emilkowalski/skills
+Copyright © Emil Kowalski
+MIT License — https://opensource.org/licenses/MIT
+
+Ported into:
+  knowledge/06-motion.md         — frequency gate, purpose categories, easing
+                                   tokens (verbatim), per-recipe values, severity
+                                   rubric, reduced-motion approach, hover gating;
+                                   three named reference curves (--ease-out,
+                                   --ease-in-out, --ease-drawer) ported verbatim
+                                   from skills/review-animations/STANDARDS.md
+                                   (43-rule catalog); animate skill command
+                                   vocabulary from skills/animate/SKILL.md
+  agents/theme-designer.md       — frequency gate table, severity rubric, press
+                                   feedback recipe, entrance recipe
+  scripts/tf_slop.py             — severity rubric (HIGH/MEDIUM/LOW definitions)
+                                   and stdlib rules 6–14 (scale-zero, ungated-hover,
+                                   ease-in-on-transition, missing-reduced-motion,
+                                   active-sparse, transform-origin-sparse,
+                                   entrance-feedback-ratio, transition-all,
+                                   webapp-duration-over-budget)
+
+MIT License text:
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+───────────────────────────────────────────────────────────────────────────────
+Taste Skill
+https://github.com/Leonxlnx/taste-skill
+Copyright © 2026 Leonxlnx
+MIT License — https://opensource.org/licenses/MIT
+
+Adapted into:
+  scripts/tf_slop.py             — categorical slop rules 17–25 (premium-consumer
+                                   palette, accent consistency, radius system,
+                                   em-dash-in-copy, eyebrow density, section-number
+                                   eyebrows, decorative status dots, all-caps body,
+                                   marquee overuse), plus rules 33–34 added in the
+                                   2026-09-03 refresh (duplicate-cta-intent,
+                                   dark-mode-pure-black-white) and hardened hex
+                                   anchor lists for rule 17 (premium-consumer
+                                   palette), derived from skills/taste-skill/SKILL.md
+  knowledge/03-typography.md     — font-pairing guidance and the Fraunces /
+                                   Instrument Serif demotions (both fonts are now
+                                   treated as banned-as-default, not merely
+                                   discouraged, per the 2026-09-03 refresh); the
+                                   serif-rotation pool and same-family-emphasis /
+                                   italic-descender-clearance rules added in that
+                                   refresh
+  knowledge/02-color.md          — premium-consumer palette hex list, the 7
+                                   alternative palette families, and the palette-
+                                   rotation rule, added in the 2026-09-03 refresh
+  agents/theme-designer.md       — the "Dials" section (brief-vocabulary inference
+                                   table, use-case presets, motion-claimed-vs-shown
+                                   enforcement) and new anti-default rules (hero
+                                   stack discipline, hero top-padding cap, split-
+                                   header ban, zigzag alternation cap, page theme
+                                   lock, CTA discipline), added in the 2026-09-03
+                                   refresh
+  templates/theme.schema.json    — the three-dial system (design_variance,
+                                   motion_intensity, visual_density), adapted from
+                                   Taste Skill's intensity framework
+  knowledge/13-anti-patterns.md  — portions of the categorical quality rules;
+                                   rule 19 broadened to cover Fraunces alongside
+                                   Instrument Serif in the 2026-09-03 refresh
+
+The motion_intensity dial's scope (website surface only; webapp/mobile governed by
+Emil Kowalski's frequency gate) is a Theme Forge-specific resolution not present in
+the original.
+
+Ported from skills/taste-skill/SKILL.md, the repo's default "design-taste-frontend"
+skill (not the narrower skills/gpt-tasteskill/SKILL.md variant, which is a separate,
+stricter skill in the same repo and was not used as a source here).
+
+Refreshed 2026-09-03 against the then-current state of the upstream repo (1207-line
+skills/taste-skill/SKILL.md). Portions of the original v2 rule set ("all-caps-body"
+as a distinct standalone rule) have since been superseded upstream and are now
+maintained independently in Theme Forge rather than tracked against a current
+upstream equivalent.
+
+Use of this content is subject to the MIT License (text above).

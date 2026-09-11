@@ -1,0 +1,33 @@
+# .githooks/.blocked — personal identifier block list
+# ─────────────────────────────────────────────────────────────────────────────
+# This file is NOT committed (it is gitignored and never pushed).
+# Copy it:  cp .githooks/.blocked.example .githooks/.blocked
+# Then fill in your own patterns under each section.
+#
+# Format:
+#   [names]        — full-name variants (P1 group)
+#   [identifiers]  — username / email / domain / org (P2 group)
+#   • One grep -iE pattern per line  (case-insensitive at runtime)
+#   • Blank lines and lines starting with # are ignored
+#   • Escape dots:  john\.doe  not  john.doe
+#
+# After creating the file, activate the hooks once per clone:
+#   git config core.hooksPath .githooks
+#
+# ─────────────────────────────────────────────────────────────────────────────
+
+[names]
+# Full name variants — matched against git identity metadata and staged content.
+# Replace the examples below with your own.
+#
+# Jane Doe
+# J Doe
+
+[identifiers]
+# Usernames, email addresses, email domains, and employer/org names.
+# Replace the examples below with your own.
+#
+# jane\.doe
+# jdoe_handle
+# employer\.com
+# EmployerName

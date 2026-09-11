@@ -1,0 +1,42 @@
+#!/usr/bin/env bash
+# .githooks/commit-msg
+# Blocks commit messages containing blocked personal identifiers.
+# Fires for every commit: initial, amend, merge, squash, rebase fixup.
+#
+# Pattern variable names are intentionally opaque.
+# Actual patterns live in .githooks/.blocked (gitignored, never committed).
+
+set -euo pipefail
+
+HOOKS_DIR="$(cd "$(dirname "$0")" && pwd)"
+MSG_FILE="${1:?commit-msg: missing message file argument}"
+BLOCKED_FILE="$HOOKS_DIR/.blocked"
+
+[[ ! -f "$BLOCKED_FILE" ]] && exit 0  # No patterns — skip silently.
+
+# Parse the same two opaque groups used by pre-commit.
+_section() {
+  local sec="$1"
+  awk -v s="$sec" '
+    /^\[/ { in_sec = (tolower($0) == "[" tolower(s) "]"); next }
+    in_sec && /^[[:space:]]*#/ { next }
+    in_sec && /^[[:space:]]*$/ { next }
+    in_sec { print }
+  ' "$BLOCKED_FILE"
+}
+
+P1=$(_section "names"       | paste -sd '|' - || true)
+P2=$(_section "identifiers" | paste -sd '|' - || true)
+
+_parts=()
+[[ -n "$P1" ]] && _parts+=("$P1")
+[[ -n "$P2" ]] && _parts+=("$P2")
+_COMBINED=$(IFS='|'; printf '%s' "${_parts[*]:-}")
+
+[[ -z "$_COMBINED" ]] && exit 0
+
+if grep -qiE "$_COMBINED" "$MSG_FILE"; then
+  printf '[commit-msg] BLOCKED: the commit message contains a blocked identifier.\n' >&2
+  printf '  Edit the message and retry:  git commit --edit\n' >&2
+  exit 1
+fi

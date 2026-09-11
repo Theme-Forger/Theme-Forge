@@ -1,0 +1,99 @@
+name: Validate
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  plugin-validate:
+    name: Plugin validation
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Claude Code CLI
+        run: npm install -g @anthropic-ai/claude-code
+
+      - name: Validate plugin manifest
+        run: claude plugin validate plugins/theme-forge
+
+  python-syntax:
+    name: Python syntax check
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Check all tf_*.py scripts compile
+        run: |
+          python -m py_compile plugins/theme-forge/scripts/tf_*.py
+          echo "All scripts compile cleanly."
+
+      - name: Verify stdlib-only (no third-party imports)
+        run: |
+          # Any import that isn't in stdlib signals an accidental dependency.
+          python - << 'EOF'
+          import ast, sys, pathlib, importlib.util
+
+          STDLIB = set(sys.stdlib_module_names)  # Python 3.10+
+
+          errors = []
+          for path in sorted(pathlib.Path("plugins/theme-forge/scripts").glob("tf_*.py")):
+              tree = ast.parse(path.read_text(encoding="utf-8"))
+              for node in ast.walk(tree):
+                  if isinstance(node, (ast.Import, ast.ImportFrom)):
+                      mods = (
+                          [a.name for a in node.names]
+                          if isinstance(node, ast.Import)
+                          else [node.module] if node.module else []
+                      )
+                      for m in mods:
+                          top = m.split(".")[0]
+                          if top and top not in STDLIB:
+                              errors.append(f"{path.name}: non-stdlib import '{m}'")
+          if errors:
+              print("Non-stdlib imports found (Theme Forge must be stdlib-only):")
+              for e in errors:
+                  print(f"  {e}")
+              sys.exit(1)
+          print("All imports are stdlib-only.")
+          EOF
+
+  schema-valid:
+    name: JSON schema validity
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate JSON files parse cleanly
+        run: |
+          python - << 'EOF'
+          import json, pathlib, sys
+
+          errors = []
+          for p in sorted(pathlib.Path(".").rglob("*.json")):
+              # Skip .git and node_modules if present
+              parts = p.parts
+              if ".git" in parts or "node_modules" in parts:
+                  continue
+              try:
+                  json.loads(p.read_text(encoding="utf-8"))
+              except json.JSONDecodeError as e:
+                  errors.append(f"{p}: {e}")
+
+          if errors:
+              print("JSON parse errors:")
+              for e in errors:
+                  print(f"  {e}")
+              sys.exit(1)
+          print(f"All JSON files are valid.")
+          EOF

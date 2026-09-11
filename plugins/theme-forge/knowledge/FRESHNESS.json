@@ -1,0 +1,22 @@
+{
+  "schema": 1,
+  "seed_version": "2026-08",
+  "last_full_refresh": null,
+  "domains": {
+    "01-design-tokens":    { "refreshed": null, "sources": 0, "status": "seed" },
+    "02-color":            { "refreshed": null, "sources": 0, "status": "seed" },
+    "03-typography":       { "refreshed": null, "sources": 0, "status": "seed" },
+    "04-aesthetics":       { "refreshed": null, "sources": 0, "status": "seed" },
+    "05-css-platform":     { "refreshed": null, "sources": 0, "status": "seed" },
+    "06-motion":           { "refreshed": null, "sources": 0, "status": "seed" },
+    "07-component-systems":{ "refreshed": null, "sources": 0, "status": "seed" },
+    "08-logos-graphics":   { "refreshed": null, "sources": 0, "status": "seed" },
+    "09-mobile":           { "refreshed": null, "sources": 0, "status": "seed" },
+    "10-accessibility":    { "refreshed": null, "sources": 0, "status": "seed" },
+    "11-native-platform":  { "refreshed": null, "sources": 0, "status": "seed" },
+    "12-asset-tooling":    { "refreshed": null, "sources": 0, "status": "seed" },
+    "13-anti-patterns":    { "refreshed": null, "sources": 0, "status": "seed" },
+    "14-asset-sources":    { "refreshed": null, "sources": 0, "status": "seed",
+                             "priority": "high" }
+  }
+}

@@ -1,0 +1,46 @@
+<!-- device-frames.html : theme-agnostic Mobile surface chrome only. Two device
+     frames (iOS + Android) on a neutral studio backdrop. Each theme's own
+     screens (surfaces/mobile.html, written by surface-composer) are cloned
+     into both frames at runtime by gallery.shell.html's JS, keyed by the
+     active theme (tf_gallery.py emits one <template id="tf-screens-N"> per
+     theme). Platform differences (elevation, tab-bar blur vs solid fallback,
+     cutout, home bar) are CSS-driven by the .ios / .android ancestor -- this
+     file only owns that physical hardware geometry, never screen content. -->
+
+<section class="surface surface-mobile" data-surface="mobile" role="region" aria-label="Mobile app preview">
+
+  <div class="device-col">
+    <div class="os-label"><svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M16 2c.1 1.4-.5 2.7-1.4 3.6-.9 1-2.3 1.7-3.6 1.6-.2-1.3.5-2.7 1.4-3.6C13.2 2.7 14.7 2 16 2zM20 17.5c-.6 1.4-1 2-1.7 3.2-1 1.7-2.4 3.8-4.2 3.8-1.5 0-2-1-3.7-1s-2.3 1-3.7 1c-1.8 0-3.1-1.9-4.2-3.6C-.2 17.4-.6 11 2.6 8.9c1.2-.8 2.4-.9 3.5-.9 1.5 0 2.6 1 3.4 1 .8 0 2.2-1.1 3.9-1 .8 0 3 .3 4.3 2.3-3.6 2.1-3 6.5.8 8.2z"/></svg> iOS <span class="os-note">shadows render</span></div>
+    <div class="device ios">
+      <div class="cutout" aria-hidden="true"></div>
+      <div class="screen">
+        <div class="statusbar"><span class="time">9:41</span><span class="sb-r">
+          <svg viewBox="0 0 24 16" fill="currentColor"><rect x="0" y="9" width="3" height="5" rx="1"/><rect x="5" y="6" width="3" height="8" rx="1"/><rect x="10" y="3" width="3" height="11" rx="1"/><rect x="15" y="0" width="3" height="14" rx="1"/></svg>
+          <svg viewBox="0 0 24 16" fill="currentColor"><path d="M12 3c3 0 5.7 1.1 7.7 3l-1.4 1.5A9 9 0 0012 5a9 9 0 00-6.3 2.5L4.3 6C6.3 4.1 9 3 12 3zm0 4c1.9 0 3.6.7 4.9 1.9l-1.5 1.5A5 5 0 0012 9c-1.3 0-2.5.5-3.4 1.4L7.1 8.9A7 7 0 0112 7zm0 4c.8 0 1.6.3 2.1.9L12 14l-2.1-2.1c.5-.6 1.3-.9 2.1-.9z"/></svg>
+          <svg viewBox="0 0 26 16" fill="none" stroke="currentColor"><rect x="1" y="3" width="20" height="10" rx="2.5"/><rect x="3" y="5" width="14" height="6" rx="1" fill="currentColor"/><rect x="22.5" y="6" width="2" height="4" rx="1" fill="currentColor"/></svg>
+        </span></div>
+        <div class="screens" data-frame="ios" tabindex="0" aria-label="iOS screens, swipe to browse"></div>
+        <div class="homebar" aria-hidden="true"><span class="pill"></span></div>
+      </div>
+    </div>
+    <div class="screen-dots" data-dots-for="ios" role="tablist" aria-label="iOS screen"></div>
+  </div>
+
+  <div class="device-col">
+    <div class="os-label"><svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M17.6 9.5l1.9-3.3a.4.4 0 00-.7-.4l-2 3.4A11.3 11.3 0 0012 8c-1.7 0-3.3.4-4.8 1.2l-2-3.4a.4.4 0 00-.7.4l1.9 3.3C3.1 11.3 1 14.4 1 18h22c0-3.6-2.1-6.7-5.4-8.5zM7 15.2a1 1 0 110-2 1 1 0 010 2zm10 0a1 1 0 110-2 1 1 0 010 2z"/></svg> Android <span class="os-note">elevation only — blurred, never offset</span></div>
+    <div class="device android">
+      <div class="cutout" aria-hidden="true"></div>
+      <div class="screen">
+        <div class="statusbar"><span class="time">9:41</span><span class="sb-r">
+          <svg viewBox="0 0 24 16" fill="currentColor"><path d="M2 14l20 0 0-11z"/></svg>
+          <svg viewBox="0 0 24 16" fill="currentColor"><path d="M12 4c3 0 5.7 1.1 7.7 3L12 16 4.3 7C6.3 5.1 9 4 12 4z"/></svg>
+          <svg viewBox="0 0 26 16" fill="none" stroke="currentColor"><rect x="1" y="3" width="21" height="10" rx="2"/><rect x="3" y="5" width="16" height="6" fill="currentColor"/><rect x="23" y="6" width="2" height="4" fill="currentColor"/></svg>
+        </span></div>
+        <div class="screens" data-frame="android" tabindex="0" aria-label="Android screens, swipe to browse"></div>
+        <div class="homebar" aria-hidden="true"><span class="pill"></span></div>
+      </div>
+    </div>
+    <div class="screen-dots" data-dots-for="android" role="tablist" aria-label="Android screen"></div>
+  </div>
+
+</section>

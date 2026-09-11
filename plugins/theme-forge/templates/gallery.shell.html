@@ -1,0 +1,405 @@
+<!doctype html>
+<html lang="en" data-theme-count="{{THEME_COUNT}}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{PROJECT_NAME}} · Theme Forge gallery</title>
+<style>
+/* The one permitted network reference (D2). Fails gracefully to fallback stacks. */
+{{FONT_IMPORT}}
+{{GALLERY_CSS}}
+/* per-theme variable blocks (light + dark), scoped by [data-tf-theme] */
+{{THEME_STYLES}}
+/* each theme's own bespoke website + webapp + mobile CSS, one @scope block per
+   theme per surface so independently-authored stylesheets coexisting in the
+   compare grid can't collide on a shared class name — see tf_gallery.py's
+   read_theme_surface() / read_theme_mobile_screens() */
+{{WEBSITE_CSS}}
+{{WEBAPP_CSS}}
+{{MOBILE_CSS}}
+/* motion.css from theme 1 — keyframe names and utility classes are identical
+   across all themes; per-theme timing differences come from the --tf-dur-*
+   custom properties above, which override :root values in the scoped selectors */
+{{MOTION_CSS}}
+</style>
+</head>
+<body>
+<a href="#stage" class="skip" style="position:absolute;left:-999px">Skip to previews</a>
+
+<div class="app-frame">
+  <header class="g-header">
+    <button class="iconbtn" id="railToggle" aria-expanded="false" aria-controls="galleryRail" title="Show theme list">Themes</button>
+    <div class="g-brand"><span class="mark">theme·<b>forge</b></span><span class="sub">gallery</span></div>
+    <div class="g-meta">
+      <div class="pair"><span>Project</span><span>{{PROJECT_NAME}}</span></div>
+      <div class="pair"><span>Generated</span><span>{{GEN_DATE}}</span></div>
+      <div class="pair"><span>Knowledge</span><span>{{REFRESH_DATE}}</span></div>
+      {{VERIFICATION_STATUS}}
+      <button class="iconbtn" id="selectBtn" title="Copy the apply command for the current theme">Select this theme</button>
+    </div>
+  </header>
+
+  <nav class="g-rail" id="galleryRail" aria-label="Themes">
+    <div class="rail-head"><span class="eyebrow">Six directions</span><span class="eyebrow mono">1–6</span></div>
+    {{THEME_RAIL}}
+  </nav>
+  <div class="rail-scrim" id="railScrim"></div>
+
+  <main class="g-stage" id="stage">
+    <div class="stage-bar">
+      <div class="tabset" role="tablist" aria-label="Surface">
+        <button class="tab" role="tab" data-surface="website" aria-selected="false">Website <kbd>W</kbd></button>
+        <button class="tab" role="tab" data-surface="webapp" aria-selected="false">Web app <kbd>A</kbd></button>
+        <button class="tab" role="tab" data-surface="mobile" aria-selected="false">Mobile app <kbd>M</kbd></button>
+        <button class="tab" role="tab" data-surface="brand" aria-selected="false">Brand <kbd>B</kbd></button>
+      </div>
+      <div class="spacer"></div>
+      <button class="iconbtn" id="compareBtn" aria-pressed="false" title="Compare all six">Compare <kbd>C</kbd></button>
+      <button class="iconbtn" id="drawerBtn" title="Theme details">Details</button>
+      <div class="seg" role="group" aria-label="Preview appearance">
+        <button data-appear="light" aria-pressed="true">Light</button>
+        <button data-appear="dark" aria-pressed="false">Dark <kbd>D</kbd></button>
+      </div>
+    </div>
+
+    <div class="stage-scroll" id="stageScroll">
+      <div class="canvas" id="canvas" data-tf-theme="1" data-tf-appear="{{DEFAULT_APPEAR}}">
+        {{SURFACES}}
+        {{DEVICE_FRAMES}}
+        {{BRAND_PANELS}}
+      </div>
+      <div class="compare" id="compare" aria-label="Compare all themes">
+        {{COMPARE}}
+      </div>
+    </div>
+  </main>
+</div>
+
+<aside class="g-drawer" id="drawer" aria-label="Theme details" aria-hidden="true">
+  <button class="iconbtn drawer-close" id="drawerClose" aria-label="Close details">Close</button>
+  {{DRAWERS}}
+</aside>
+
+<div class="copy-toast" id="toast" role="status" aria-live="polite"></div>
+
+<template id="tf-screens-fallback"></template>
+
+<script>
+(function () {
+  "use strict";
+  var THEME_COUNT = {{THEME_COUNT}};
+  // Each theme's own natural court ("light"/"dark"), in rail order. A
+  // dark-court theme writes its dark aesthetic into color.light, so this
+  // cannot be inferred in the browser -- tf_gallery.py computes it from
+  // actual background lightness and bakes it in here.
+  var THEME_COURTS = {{THEME_COURTS}};
+  var state = { theme: {{DEFAULT_THEME}}, surface: "{{DEFAULT_SURFACE}}", appear: "{{DEFAULT_APPEAR}}", appearTouched: false, compare: false };
+  var canvas = document.getElementById("canvas");
+  var compareEl = document.getElementById("compare");
+  var stageScroll = document.getElementById("stageScroll");
+  var drawer = document.getElementById("drawer");
+  var toast = document.getElementById("toast");
+
+  // Build (or rebuild) the screen-dots + filmstrip scroll wiring for every
+  // .screen-dots found within *scope*. Compare-grid cells are static (built
+  // once, content never changes); the canvas is rebuilt on every theme
+  // switch since fillCanvasMobileScreens() replaces its screen content.
+  function buildScreenDots(scope) {
+    scope.querySelectorAll(".screen-dots").forEach(function (dots) {
+      dots.innerHTML = "";
+      var frameId = dots.getAttribute("data-dots-for");
+      var strip = dots.closest(".device-col").querySelector('.screens[data-frame="' + frameId + '"]');
+      if (!strip) return;
+      var panes = strip.querySelectorAll(".screen-pane");
+      panes.forEach(function (pane, i) {
+        var b = document.createElement("button");
+        b.setAttribute("role", "tab");
+        b.setAttribute("aria-current", i === 0 ? "true" : "false");
+        b.setAttribute("aria-label", "Screen " + (i + 1) + (pane.dataset.screen ? ": " + pane.dataset.screen : ""));
+        b.innerHTML = "<i></i>";
+        b.addEventListener("click", function () {
+          strip.scrollTo({ left: pane.offsetLeft, behavior: "smooth" });
+        });
+        dots.appendChild(b);
+      });
+      // Assignment (not addEventListener) so a rebuild replaces the previous
+      // listener instead of stacking another one on the same persistent
+      // .screens div (the canvas's own strip is rebuilt on every theme switch).
+      strip.onscroll = function () {
+        var idx = Math.round(strip.scrollLeft / strip.clientWidth);
+        dots.querySelectorAll("button").forEach(function (btn, i) {
+          btn.setAttribute("aria-current", i === idx ? "true" : "false");
+        });
+      };
+    });
+  }
+
+  // Clone the active theme's own screens into the canvas's shared device
+  // frame (bezel/status-bar chrome stays put; only the content inside swaps).
+  // Compare-grid cells need no cloning — tf_gallery.py already embedded each
+  // theme's own screens directly into its own cell's frame at build time.
+  function fillCanvasMobileScreens() {
+    var tpl = document.getElementById("tf-screens-" + state.theme);
+    if (!tpl) return;
+    canvas.querySelectorAll(".screens").forEach(function (host) {
+      host.innerHTML = "";
+      host.appendChild(tpl.content.cloneNode(true));
+    });
+    buildScreenDots(canvas);
+  }
+
+  fillCanvasMobileScreens();
+  buildScreenDots(compareEl);
+
+  function showToast(msg) {
+    toast.textContent = msg;
+    toast.classList.add("show");
+    clearTimeout(toast._t);
+    toast._t = setTimeout(function () { toast.classList.remove("show"); }, 1600);
+  }
+
+  function copy(text, label) {
+    var done = function () { showToast((label || "Copied") + " · copied"); };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(done, function () { fallbackCopy(text); done(); });
+    } else { fallbackCopy(text); done(); }
+  }
+  function fallbackCopy(text) {
+    var ta = document.createElement("textarea");
+    ta.value = text; ta.style.position = "fixed"; ta.style.left = "-9999px";
+    document.body.appendChild(ta); ta.select();
+    try { document.execCommand("copy"); } catch (e) {}
+    document.body.removeChild(ta);
+  }
+
+  function apply() {
+    // The active theme on the main canvas shows its OWN court until the user
+    // explicitly touches the Light/Dark toggle -- the same rule the compare
+    // grid below has always followed. Applying one global appearance here
+    // (derived from theme 1) is what made a dark-court theme render its light
+    // alternative whenever the first theme in the set happened to be light.
+    canvas.setAttribute("data-tf-theme", state.theme);
+    canvas.setAttribute(
+      "data-tf-appear",
+      state.appearTouched ? state.appear : (THEME_COURTS[state.theme - 1] || state.appear)
+    );
+    // Compare-grid cells start at each theme's OWN baked-in default (dark-
+    // court themes pre-set to "dark" in the generated HTML -- see tf_gallery.py
+    // compare_html()) so the one view meant to judge all six side by side
+    // shows each one's true identity, not a uniform "light" that silently
+    // shows a dark-court theme's non-primary alternative. Only force every
+    // cell to the single global state once the user has actually touched the
+    // Light/Dark toggle -- an explicit "show me all six in dark/light" ask,
+    // as distinct from the untouched initial render.
+    if (state.appearTouched) {
+      document.querySelectorAll(".compare .cell").forEach(function (cell) {
+        cell.setAttribute("data-tf-appear", state.appear);
+      });
+    }
+    // surfaces — web surfaces are per-theme (data-tf-theme); app/mobile are shared
+    canvas.querySelectorAll(".surface").forEach(function (s) {
+      var themeAttr = s.getAttribute("data-tf-theme");
+      var themeMatch = !themeAttr || themeAttr === String(state.theme);
+      s.classList.toggle("is-active", themeMatch && s.getAttribute("data-surface") === state.surface);
+    });
+    // rail
+    document.querySelectorAll(".rail-item").forEach(function (r) {
+      r.setAttribute("aria-current", r.getAttribute("data-theme") === String(state.theme) ? "true" : "false");
+    });
+    // tabs
+    document.querySelectorAll(".tab").forEach(function (t) {
+      t.setAttribute("aria-selected", t.getAttribute("data-surface") === state.surface ? "true" : "false");
+    });
+    // appearance seg
+    document.querySelectorAll(".seg [data-appear]").forEach(function (b) {
+      b.setAttribute("aria-pressed", b.getAttribute("data-appear") === state.appear ? "true" : "false");
+    });
+    // brand panels — show only the active theme's panel
+    document.querySelectorAll(".brand-panel").forEach(function (p) {
+      p.classList.toggle("is-active", p.getAttribute("data-brand-theme") === String(state.theme));
+    });
+    // compare — keep the active surface group in sync; suppress on brand tab
+    var showCompare = state.compare && state.surface !== "brand";
+    compareEl.classList.toggle("is-on", showCompare);
+    compareEl.setAttribute("data-compare-active", state.surface);
+    stageScroll.classList.toggle("compare-mode", showCompare);
+    document.getElementById("compareBtn").setAttribute("aria-pressed", showCompare ? "true" : "false");
+    // drawers: show only the active theme's
+    document.querySelectorAll(".drawer-theme").forEach(function (d) {
+      d.style.display = d.getAttribute("data-theme") === String(state.theme) ? "block" : "none";
+    });
+  }
+
+  function setTheme(n) {
+    if (n >= 1 && n <= THEME_COUNT) {
+      state.theme = n;
+      state.compare = false;
+      // Default to each theme's own designed reading, not a blanket "light" --
+      // a dark-court theme's dark resolution is its primary intended
+      // appearance, not an opt-in variant reachable only by manually pressing
+      // the Dark button. Kept in sync with state.appear (rather than left to
+      // apply() alone) so the Light/Dark segment's pressed state describes
+      // what is actually on screen.
+      //
+      // Guarded on appearTouched: this used to overwrite the appearance on
+      // EVERY theme switch, so a user who pressed Dark to compare all six in
+      // one court silently lost that choice the moment they moved along the
+      // rail. An explicit toggle press outranks the per-theme default.
+      if (!state.appearTouched) {
+        var railItem = document.querySelector('.rail-item[data-theme="' + n + '"]');
+        state.appear = (railItem && railItem.getAttribute("data-tf-dark-court") === "true") ? "dark" : "light";
+      }
+      apply();
+      fillCanvasMobileScreens();
+    }
+  }
+  function setSurface(s) { state.surface = s; apply(); }
+  function toggleAppear() { state.appear = state.appear === "light" ? "dark" : "light"; state.appearTouched = true; apply(); }
+  function toggleCompare() { state.compare = !state.compare; apply(); }
+
+  // wiring
+  document.querySelectorAll(".rail-item").forEach(function (r) {
+    r.addEventListener("click", function () {
+      setTheme(parseInt(r.getAttribute("data-theme"), 10));
+      closeRail(); // narrow-viewport drawer: picking a theme should also close it
+    });
+  });
+
+  // Narrow-viewport rail drawer (see gallery.css's max-width: 700px block).
+  // At full width these elements are simply invisible/inert -- no-op there.
+  var appFrame = document.querySelector(".app-frame");
+  var railToggle = document.getElementById("railToggle");
+  var railScrim = document.getElementById("railScrim");
+  function openRail() {
+    appFrame.classList.add("rail-open");
+    if (railToggle) railToggle.setAttribute("aria-expanded", "true");
+  }
+  function closeRail() {
+    appFrame.classList.remove("rail-open");
+    if (railToggle) railToggle.setAttribute("aria-expanded", "false");
+  }
+  if (railToggle) {
+    railToggle.addEventListener("click", function () {
+      if (appFrame.classList.contains("rail-open")) closeRail(); else openRail();
+    });
+  }
+  if (railScrim) railScrim.addEventListener("click", closeRail);
+  document.addEventListener("keydown", function (e) {
+    if (e.key === "Escape") closeRail();
+  });
+  document.querySelectorAll(".tab").forEach(function (t) {
+    t.addEventListener("click", function () { setSurface(t.getAttribute("data-surface")); });
+  });
+  document.querySelectorAll(".seg [data-appear]").forEach(function (b) {
+    b.addEventListener("click", function () { state.appear = b.getAttribute("data-appear"); state.appearTouched = true; apply(); });
+  });
+  document.getElementById("compareBtn").addEventListener("click", toggleCompare);
+  document.querySelectorAll(".compare .cell").forEach(function (cell) {
+    cell.addEventListener("click", function () { setTheme(parseInt(cell.getAttribute("data-theme"), 10)); });
+  });
+  document.getElementById("drawerBtn").addEventListener("click", function () {
+    drawer.classList.add("is-open"); drawer.setAttribute("aria-hidden", "false");
+  });
+  document.getElementById("drawerClose").addEventListener("click", function () {
+    drawer.classList.remove("is-open"); drawer.setAttribute("aria-hidden", "true");
+  });
+  document.getElementById("selectBtn").addEventListener("click", function () {
+    var slug = document.querySelector('.rail-item[data-theme="' + state.theme + '"]').getAttribute("data-slug");
+    copy("/theme-forge:apply-theme " + slug, "Theme " + state.theme + " (" + slug + ")");
+  });
+  // click-to-copy any token value in the drawer
+  document.querySelectorAll("[data-copy]").forEach(function (el) {
+    el.style.cursor = "copy";
+    el.addEventListener("click", function () { copy(el.getAttribute("data-copy"), el.getAttribute("data-copy")); });
+  });
+
+  document.addEventListener("keydown", function (e) {
+    if (e.target && /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)) return;
+    var k = e.key.toLowerCase();
+    if (k >= "1" && k <= "6") { setTheme(parseInt(k, 10)); }
+    else if (k === "w") { setSurface("website"); }
+    else if (k === "a") { setSurface("webapp"); }
+    else if (k === "m") { setSurface("mobile"); }
+    else if (k === "b") { setSurface("brand"); }
+    else if (k === "d") { toggleAppear(); }
+    else if (k === "c") { toggleCompare(); }
+    else if (k === "escape") {
+      drawer.classList.remove("is-open"); drawer.setAttribute("aria-hidden", "true");
+      document.querySelectorAll(".app-modal-scrim.is-open").forEach(function (s) { s.classList.remove("is-open"); });
+    }
+  });
+
+  // ── Surface interactivity ─────────────────────────────────────────────────
+
+  // Modal open / close — delegated on document so it works in compare cells too
+  document.addEventListener("click", function (e) {
+    // open
+    if (e.target.closest("[data-modal-open]")) {
+      var surface = e.target.closest(".surface-app");
+      if (surface) {
+        var scrim = surface.querySelector(".app-modal-scrim");
+        if (scrim) scrim.classList.add("is-open");
+      }
+    }
+    // close / confirm
+    if (e.target.closest("[data-modal-close], [data-modal-confirm]")) {
+      var scrim = e.target.closest(".app-modal-scrim");
+      if (scrim) {
+        scrim.classList.remove("is-open");
+        // on confirm, flash the toast
+        if (e.target.closest("[data-modal-confirm]")) {
+          var toast2 = scrim.closest(".app-body") && scrim.closest(".app-body").querySelector(".app-toast");
+          if (toast2) {
+            toast2.classList.add("is-visible");
+            setTimeout(function () { toast2.classList.remove("is-visible"); }, 2400);
+          }
+        }
+      }
+    }
+  });
+
+  // Form field focus + validation feedback
+  document.addEventListener("focusin", function (e) {
+    var field = e.target.closest(".field");
+    if (field) field.classList.add("focused");
+  });
+  document.addEventListener("focusout", function (e) {
+    var field = e.target.closest(".field");
+    if (field) {
+      field.classList.remove("focused");
+      var inp = field.querySelector("input");
+      if (inp) field.classList.toggle("valid", inp.value.trim().length > 0);
+    }
+  });
+  document.addEventListener("input", function (e) {
+    var field = e.target.closest(".field");
+    if (field) {
+      var inp = field.querySelector("input");
+      if (inp) field.classList.toggle("valid", inp.value.trim().length > 0);
+    }
+  });
+
+  // Mobile tab bar — map each icon to a named screen and navigate to it
+  var TAB_SCREEN_MAP = ["home", "detail", "form", "sign-in"];
+  document.querySelectorAll(".m-tabbar").forEach(function (tabbar) {
+    var icons = tabbar.querySelectorAll(".ti");
+    var screenPane = tabbar.closest(".screen-pane");
+    if (!screenPane) return;
+    var strip = screenPane.closest(".screens");
+    if (!strip) return;
+    icons.forEach(function (ti, idx) {
+      ti.addEventListener("click", function () {
+        var targetScreen = TAB_SCREEN_MAP[idx] || "home";
+        var pane = strip.querySelector('[data-screen="' + targetScreen + '"]');
+        if (pane) strip.scrollTo({ left: pane.offsetLeft, behavior: "smooth" });
+        icons.forEach(function (t) { t.classList.remove("on"); });
+        ti.classList.add("on");
+      });
+    });
+  });
+
+  apply();
+})();
+</script>
+</body>
+</html>

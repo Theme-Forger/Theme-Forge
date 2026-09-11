@@ -1,0 +1,32 @@
+# Playwright MCP scratch output: page snapshots (.yml), console logs, and
+# screenshots, written into the working directory on every browser call. Purely
+# transient and regenerated on demand — 250+ files / 6 MB had accumulated here
+# before this entry existed.
+.playwright-mcp/
+
+# Screenshots Playwright writes to the working directory when a call passes a
+# bare filename instead of a path.
+/*.png
+
+# Python bytecode from running the tf_*.py scripts in place.
+__pycache__/
+*.py[cod]
+
+# OS metadata
+Thumbs.db
+.DS_Store
+
+# Git hook pattern file — personal identifiers, never committed.
+# See .githooks/.blocked.example for the format.
+.githooks/.blocked
+
+# Bootstrap / build-time artifacts — Claude Code prompts used to construct the
+# plugin; not part of the public plugin release.
+BUILD-SPEC.md
+ACCEPTANCE.md
+ADDENDUM-ASSETS.md
+README-FIRST.md
+KNOWLEDGE-SEED*.md
+
+# IDE / tool backup files
+*.bak

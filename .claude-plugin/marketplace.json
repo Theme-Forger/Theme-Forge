@@ -1,0 +1,17 @@
+{
+  "name": "theme-forge",
+  "owner": { "name": "Theme Forge" },
+  "homepage": "https://github.com/Theme-Forger/theme-forge",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Theme-Forger/theme-forge.git"
+  },
+  "plugins": [
+    {
+      "name": "theme-forge",
+      "source": "./plugins/theme-forge",
+      "description": "Research-backed design theme generation, preview, and application for web, web app, and React Native projects",
+      "category": "design"
+    }
+  ]
+}

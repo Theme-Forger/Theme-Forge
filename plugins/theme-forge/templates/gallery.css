@@ -1,0 +1,719 @@
+/* Theme Forge gallery -- chrome + theme-agnostic surface components.
+ *
+ * The chrome is a "passe-partout": a quiet dark instrument panel whose only job
+ * is to make the six previewed themes pop. It carries its craft in spacing,
+ * hairlines, tabular mono token data, and neutral focus rings -- never in color.
+ * The only saturated pixels in the chrome are the theme swatches.
+ *
+ * Surface components (.site / .app / .mobile) are theme-agnostic: they read
+ * --tf-* custom properties, which tf_gallery.py emits per theme (light + dark).
+ */
+
+/* ----------------------------------------------------------------- chrome vars */
+:root {
+  color-scheme: dark;
+  --c-bg:        #15171c;   /* graphite, near-zero chroma (not slate-blue) */
+  --c-panel:     #1b1e24;
+  --c-panel-2:   #22262e;
+  --c-stage:     #0e1013;   /* darkest: the wall the previews hang on */
+  --c-line:      #2b303a;   /* hairline */
+  --c-line-2:    #3a414d;
+  --c-text:      #e7e9ee;
+  --c-text-dim:  #a2a9b4;
+  --c-text-faint:#8b94a2;
+  --c-focus:     #eef0f4;   /* neutral high-contrast ring */
+  --c-ok:        #64d19a;
+  --c-warn:      #e0b64f;
+  --c-fail:      #e67a72;
+
+  /* Full system fallback stacks are mandatory, not optional. The "avoid system-ui"
+   * guidance is about the font a theme CHOOSES as its identity — it does NOT apply to
+   * fallbacks. Every font-family here (and every --tf-font-* the themes emit) must end
+   * in a real system fallback so the gallery stays deliberate with the network down and
+   * the Google Fonts @import unreachable. Acceptance D3 greps for exactly this; D4
+   * simulates offline. Do not strip these tails. */
+  --c-ui: ui-sans-serif, -apple-system, "Segoe UI", Helvetica, Arial, sans-serif;
+  --c-mono: "JetBrains Mono", ui-monospace, "SF Mono", "Cascadia Code", "Consolas", "Liberation Mono", monospace;
+
+  --c-s1: 4px; --c-s2: 8px; --c-s3: 12px; --c-s4: 16px; --c-s5: 24px; --c-s6: 32px;
+  --rail-w: 264px;
+  --drawer-w: 400px;
+  --header-h: 52px;
+}
+
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body {
+  margin: 0;
+  background: var(--c-bg);
+  color: var(--c-text);
+  font-family: var(--c-ui);
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* micro-label: uppercase, tracked, instrument-panel voice */
+.eyebrow {
+  font-size: 11px;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+  color: var(--c-text-faint);
+  font-weight: 600;
+}
+kbd {
+  font-family: var(--c-mono);
+  font-size: 11px;
+  line-height: 1;
+  padding: 3px 5px;
+  border: 1px solid var(--c-line-2);
+  border-bottom-width: 2px;
+  color: var(--c-text-dim);
+  background: var(--c-panel-2);
+  min-width: 18px;
+  display: inline-flex;
+  justify-content: center;
+}
+.mono { font-family: var(--c-mono); font-feature-settings: "tnum" 1; }
+
+/* ----------------------------------------------------------------- frame */
+.app-frame {
+  display: grid;
+  grid-template-columns: var(--rail-w) 1fr;
+  grid-template-rows: var(--header-h) 1fr;
+  grid-template-areas: "header header" "rail stage";
+  height: 100vh;
+}
+
+#railToggle { display: none; }
+
+/* header */
+.g-header {
+  grid-area: header;
+  display: flex;
+  align-items: center;
+  gap: var(--c-s5);
+  padding: 0 var(--c-s5);
+  border-bottom: 1px solid var(--c-line);
+  background: var(--c-panel);
+}
+.g-brand { display: flex; align-items: baseline; gap: 10px; }
+.g-brand .mark {
+  font-family: var(--c-mono);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  font-size: 15px;
+  color: var(--c-text);
+}
+.g-brand .mark b { color: var(--c-ok); font-weight: 700; }
+.g-brand .sub { font-size: 12px; color: var(--c-text-faint); }
+.g-meta { margin-left: auto; display: flex; gap: var(--c-s5); align-items: center; }
+.g-meta .pair { display: flex; flex-direction: column; line-height: 1.25; }
+.g-meta .pair span:first-child { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--c-text-faint); }
+.g-meta .pair span:last-child { font-size: 12px; color: var(--c-text-dim); font-family: var(--c-mono); }
+.verify-pill {
+  font-size: 10px; font-family: var(--c-mono); padding: 2px 7px; border-radius: 3px;
+  letter-spacing: .03em; white-space: nowrap;
+}
+.verify-stdlib { background: rgba(250,180,60,.18); color: #e8a020; }
+.verify-full   { background: rgba(60,210,90,.18);  color: var(--c-ok); }
+.verify-skip   { background: rgba(180,180,180,.14); color: var(--c-text-faint); }
+.verify-ok     { background: rgba(60,210,90,.18);  color: var(--c-ok); }
+
+/* theme rail */
+.g-rail {
+  grid-area: rail;
+  border-right: 1px solid var(--c-line);
+  background: var(--c-panel);
+  overflow-y: auto;
+  padding: var(--c-s3) 0 var(--c-s6);
+}
+.g-rail .rail-head { padding: var(--c-s3) var(--c-s4) var(--c-s2); display: flex; justify-content: space-between; align-items: center; }
+.rail-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: 0;
+  border-left: 2px solid transparent;
+  background: transparent;
+  color: inherit;
+  padding: var(--c-s3) var(--c-s4);
+  cursor: pointer;
+  font: inherit;
+}
+.rail-item:hover { background: var(--c-panel-2); }
+.rail-item[aria-current="true"] {
+  background: var(--c-panel-2);
+  border-left-color: var(--c-text);
+}
+.rail-item .ri-top { display: flex; align-items: center; gap: var(--c-s2); }
+.rail-item .ri-num { font-family: var(--c-mono); font-size: 11px; color: var(--c-text-faint); width: 16px; }
+.rail-item .ri-name { font-weight: 600; font-size: 13.5px; }
+.rail-item .ri-slot { margin-left: auto; }
+.slotchip {
+  font-family: var(--c-mono); font-size: 11px; color: var(--c-text-dim);
+  border: 1px solid var(--c-line-2); padding: 3px 7px;
+}
+.rail-item .ri-swatches { display: flex; gap: 3px; margin: var(--c-s2) 0 6px 24px; }
+.swatch { width: 22px; height: 14px; border: 1px solid rgba(255,255,255,.14); }
+.rail-item .ri-thesis { font-size: 11.5px; color: var(--c-text-faint); margin-left: 24px; line-height: 1.4; }
+.rail-item .badge-dev {
+  margin-left: 24px; margin-top: 6px; display: inline-block;
+  font-size: 11px; letter-spacing: .04em; color: var(--c-warn);
+  border: 1px solid color-mix(in srgb, var(--c-warn) 45%, transparent); padding: 3px 7px;
+}
+
+/* stage */
+.g-stage { grid-area: stage; background: var(--c-stage); position: relative; overflow: hidden; display: flex; flex-direction: column; }
+.stage-bar {
+  display: flex; align-items: center; gap: var(--c-s4);
+  padding: var(--c-s2) var(--c-s5);
+  border-bottom: 1px solid var(--c-line);
+  background: var(--c-bg);
+}
+.tabset { display: flex; gap: 2px; }
+.tab {
+  border: 0; background: transparent; color: var(--c-text-dim);
+  font: inherit; font-size: 12.5px; padding: 7px 12px; cursor: pointer;
+  border-bottom: 2px solid transparent; display: flex; align-items: center; gap: 8px;
+}
+.tab:hover { color: var(--c-text); }
+.tab[aria-selected="true"] { color: var(--c-text); border-bottom-color: var(--c-text); font-weight: 600; }
+.stage-bar .spacer { flex: 1; }
+.seg { display: flex; border: 1px solid var(--c-line-2); }
+.seg button {
+  border: 0; background: transparent; color: var(--c-text-dim);
+  font: inherit; font-size: 12px; padding: 6px 12px; cursor: pointer; min-height: 28px;
+}
+.seg button[aria-pressed="true"] { background: var(--c-panel-2); color: var(--c-text); }
+.iconbtn {
+  border: 1px solid var(--c-line-2); background: transparent; color: var(--c-text-dim);
+  font: inherit; font-size: 12px; padding: 6px 12px; cursor: pointer; min-height: 28px; min-width: 28px;
+  display: inline-flex; align-items: center; gap: 8px;
+}
+.iconbtn:hover { color: var(--c-text); }
+.iconbtn[aria-pressed="true"] { background: var(--c-panel-2); color: var(--c-text); }
+
+/* the scroll viewport that holds the previews */
+.stage-scroll { flex: 1; overflow: auto; padding: var(--c-s5); }
+.stage-scroll::-webkit-scrollbar { width: 12px; height: 12px; }
+.stage-scroll::-webkit-scrollbar-thumb { background: var(--c-line-2); border: 3px solid var(--c-stage); }
+
+/* the framed preview canvas: a neutral mat, one hairline, sharp corners */
+.canvas {
+  margin: 0 auto;
+  max-width: 1180px;
+  border: 1px solid var(--c-line);
+  background: var(--tf-bg, #fff);
+  overflow: clip;
+}
+.canvas.is-hidden { display: none; }
+.canvas .surface:not(.is-active) { display: none; }
+
+/* compare grid — three surface groups, only the one matching data-compare-active is shown */
+.compare { display: none; }
+.compare.is-on { display: block; }
+.compare-surface {
+  display: none;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1px;
+  background: var(--c-line);
+  border: 1px solid var(--c-line);
+  padding: 4px;
+}
+.compare[data-compare-active="website"] .compare-surface[data-compare-surface="website"],
+.compare[data-compare-active="webapp"]  .compare-surface[data-compare-surface="webapp"],
+.compare[data-compare-active="mobile"]  .compare-surface[data-compare-surface="mobile"] { display: grid; }
+.compare .cell { background: var(--c-stage); position: relative; min-width: 0; overflow: hidden; }
+.compare .cell .cap {
+  position: absolute; top: 0; left: 0; z-index: 5;
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 10px; font-size: 11px; background: linear-gradient(var(--c-bg), transparent);
+  width: 100%;
+}
+.compare .cell .cap .dot { width: 9px; height: 9px; border-radius: 50%; }
+.compare .cell .cap .nm { font-weight: 600; color: var(--c-text); }
+.compare .cell .cap .sl { font-family: var(--c-mono); font-size: 11px; color: var(--c-text-faint); margin-left: auto; }
+.compare .mini { height: 340px; overflow: hidden; padding: 4px; }
+.compare .mini > .scaler { transform: scale(0.46); transform-origin: top left; width: 217%; padding: 8px; }
+.stage-scroll.compare-mode .canvas { display: none; }
+
+/* drawer */
+.g-drawer {
+  position: fixed; top: var(--header-h); right: 0; bottom: 0; width: var(--drawer-w);
+  background: var(--c-panel); border-left: 1px solid var(--c-line);
+  transform: translateX(100%); transition: transform 180ms ease-out;
+  overflow-y: auto; z-index: 40; padding: var(--c-s5);
+}
+.g-drawer.is-open { transform: translateX(0); }
+.g-drawer h3 { font-size: 15px; margin: 0 0 2px; }
+.g-drawer .d-sub { color: var(--c-text-faint); font-size: 12px; margin-bottom: var(--c-s5); }
+.g-drawer h4 { font-size: 11px; letter-spacing: .09em; text-transform: uppercase; color: var(--c-text-faint); margin: var(--c-s5) 0 var(--c-s2); border-bottom: 1px solid var(--c-line); padding-bottom: 6px; }
+.drawer-close { position: absolute; top: var(--c-s4); right: var(--c-s4); }
+
+table.tokens { width: 100%; border-collapse: collapse; font-size: 11.5px; }
+table.tokens th { text-align: left; color: var(--c-text-faint); font-weight: 600; font-size: 11px; letter-spacing: .06em; text-transform: uppercase; padding: 4px 6px; border-bottom: 1px solid var(--c-line); }
+table.tokens td { padding: 5px 6px; border-bottom: 1px solid var(--c-line); vertical-align: middle; }
+table.tokens td.k { color: var(--c-text-dim); }
+table.tokens td .sw { display: inline-block; width: 14px; height: 14px; border: 1px solid rgba(255,255,255,.18); vertical-align: -3px; margin-right: 6px; }
+table.tokens td.v { font-family: var(--c-mono); color: var(--c-text); font-feature-settings: "tnum" 1; }
+table.tokens td.n { font-family: var(--c-mono); color: var(--c-text-dim); font-feature-settings: "tnum" 1; }
+
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { font-family: var(--c-mono); font-size: 11px; padding: 3px 7px; border: 1px solid var(--c-line-2); display: flex; gap: 6px; align-items: center; }
+.chip.pass { color: var(--c-ok); border-color: color-mix(in srgb, var(--c-ok) 40%, transparent); }
+.chip.fail { color: var(--c-fail); border-color: color-mix(in srgb, var(--c-fail) 40%, transparent); }
+.chip.warn { color: var(--c-warn); border-color: color-mix(in srgb, var(--c-warn) 40%, transparent); }
+
+.specimen { font-family: var(--tf-font-display); color: var(--c-text); line-height: 1.1; }
+.specimen div { margin-bottom: 2px; }
+.ramp-row { display: flex; gap: 4px; align-items: center; margin-bottom: 6px; }
+.ramp-row .box { width: 40px; height: 26px; border: 1px solid var(--c-line); }
+.ramp-row .lbl { font-family: var(--c-mono); font-size: 11px; color: var(--c-text-dim); }
+.logo-sizes { display: flex; align-items: flex-end; gap: 16px; flex-wrap: wrap; background: #fff; padding: 14px; }
+.logo-sizes .ls { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.logo-sizes .ls span { font-family: var(--c-mono); font-size: 11px; color: #666; }
+.motion-demo { height: 40px; background: var(--c-panel-2); position: relative; overflow: hidden; }
+.motion-demo .ball { position: absolute; top: 8px; left: 8px; width: 24px; height: 24px; background: var(--c-text); animation: slide 2.4s infinite; }
+@keyframes slide { 0%,100% { left: 8px; } 50% { left: calc(100% - 32px); } }
+
+/* toast for copy feedback */
+.copy-toast {
+  position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%) translateY(20px);
+  background: var(--c-text); color: var(--c-bg); font-size: 12px; font-weight: 600;
+  padding: 8px 14px; opacity: 0; pointer-events: none; transition: opacity 140ms, transform 140ms; z-index: 60;
+}
+.copy-toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+/* focus + motion floor */
+:where(a, button, input, select, textarea, [tabindex]):focus-visible {
+  outline: 2px solid var(--c-focus);
+  outline-offset: 2px;
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+}
+
+/* =================================================================
+   THEME SURFACE COMPONENTS -- theme-agnostic, driven by --tf-* vars
+   ================================================================= */
+.surface { display: none; }
+.surface.is-active { display: block; }
+.surface.surface-mobile.is-active { display: flex; }
+.surface, .scaler {
+  background: var(--tf-bg);
+  color: var(--tf-text);
+  font-family: var(--tf-font-body);
+  font-size: var(--tf-t-base, 16px);
+}
+
+/* per-theme brand injected via CSS custom properties (one shared markup) —
+   .brand-img is live: used by the rail's theme-swatch size preview (rail_html()
+   in tf_gallery.py), not by any bespoke surface. */
+.brand-img { display: inline-block; background: center/contain no-repeat var(--tf-logo); flex: none; }
+
+/* Layered ground (not a flat fill): two whisper-low theme-tinted radial washes over
+ * --tf-bg give the website surface a designed ground. Alpha is kept tiny so text
+ * contrast — measured against the solid --tf-bg — is unaffected. Offline-safe:
+ * color-mix + gradients are native CSS with no fetched assets. Derives from each
+ * theme's own --tf-primary / --tf-accent, so it harmonizes per theme automatically. */
+.surface-web {
+  background:
+    radial-gradient(115% 80% at 8% -10%, color-mix(in srgb, var(--tf-primary) 8%, transparent), transparent 58%),
+    radial-gradient(95% 70% at 100% -4%, color-mix(in srgb, var(--tf-accent) 7%, transparent), transparent 52%),
+    var(--tf-bg);
+}
+
+/* Base entrance-animation motion contract — .tf-fade-up/.tf-page-load/.tf-stagger
+ * are NOT retired shared components; they're the utility-motion contract every
+ * theme's own brand/motion/motion.css extends with character-specific curves
+ * (see that file's own comments). Kept live even though no current bespoke
+ * surface happens to use them yet — real, actual definitions further down this
+ * file, in the Composition-layouts section. This keyframe + the compound rule
+ * below are the shared entrance primitive both this file and motion.css build on.
+ * prefers-reduced-motion block above collapses durations to near-zero. */
+@keyframes tf-enter { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+
+/* .tf-stagger > .tf-fade-up — specific stagger when both classes are present */
+.tf-stagger > .tf-fade-up { animation-delay: calc(var(--i, 0) * 80ms); }
+
+/* --- mobile surface: two device frames on a neutral studio backdrop --- */
+.surface-mobile {
+  background: radial-gradient(circle at 50% 20%, #23262d, #131519 70%);
+  background-color: #131519;
+  padding: 40px 24px 56px;
+  display: flex; gap: 44px; justify-content: center; align-items: flex-start; flex-wrap: wrap;
+}
+.device-col { display: flex; flex-direction: column; align-items: center; gap: 14px; }
+.device-col .os-label { display: flex; align-items: center; gap: 8px; color: #c7ccd4; font-size: 12px; font-family: var(--c-mono, monospace); letter-spacing: .04em; }
+.device-col .os-label .os-note { color: #7f8794; font-size: 11px; }
+
+.device { position: relative; background: #05070a; box-shadow: 0 30px 60px -20px rgba(0,0,0,.7); }
+.device.ios { width: 288px; height: 624px; border-radius: 44px; padding: 12px; }        /* 393x852 @ ~0.733 */
+.device.android { width: 288px; height: 640px; border-radius: 28px; padding: 10px; }     /* 412x915 @ ~0.70 */
+.device .screen { position: relative; width: 100%; height: 100%; overflow: hidden; background: var(--tf-bg); color: var(--tf-text); }
+.device.ios .screen { border-radius: 33px; }
+.device.android .screen { border-radius: 20px; }
+
+/* cutouts */
+.cutout { position: absolute; z-index: 8; background: #05070a; left: 50%; }
+.device.ios .cutout { top: 10px; width: 92px; height: 26px; border-radius: 14px; transform: translateX(-50%); }
+.device.android .cutout { top: 9px; width: 19px; height: 19px; border-radius: 50%; transform: translateX(-50%); }
+
+/* status bar */
+.statusbar { position: absolute; top: 0; left: 0; right: 0; height: 40px; z-index: 7; display: flex; align-items: center; justify-content: space-between; padding: 0 20px; font-size: 11px; font-weight: 600; color: var(--tf-text); }
+.statusbar .sb-r { display: flex; gap: 5px; align-items: center; }
+.statusbar svg { width: 15px; height: 11px; }
+.statusbar .time { font-variant-numeric: tabular-nums; }
+
+/* home indicator / gesture pill */
+.homebar { position: absolute; bottom: 0; left: 0; right: 0; z-index: 9; display: flex; justify-content: center; }
+.device.ios .homebar { padding-bottom: 6px; }
+.device.ios .homebar .pill { width: 103px; height: 4px; border-radius: 4px; background: var(--tf-text); opacity: .55; }
+.device.android .homebar { padding-bottom: 5px; }
+.device.android .homebar .pill { width: 80px; height: 3px; border-radius: 3px; background: var(--tf-text); opacity: .5; }
+
+/* six-screen filmstrip */
+.screens { position: absolute; inset: 0; display: flex; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none; }
+.screens::-webkit-scrollbar { display: none; }
+/* overflow-y: auto (not hidden) -- a theme's own screen content is written
+   against an approximate device height, and a form with several fields, an
+   illustration, and a CTA can legitimately run taller than one screen (real
+   native apps scroll long forms constantly; that's normal UX, not a flaw).
+   With overflow: hidden and no per-theme scroll wrapper, that overflow was
+   silently clipped with no way to reach it at all -- confirmed live on a
+   real onboarding screen once its commissioned illustration pushed total
+   content past the available height. Scrollable-by-default here means any
+   current or future theme's screen gets this for free without needing to
+   remember its own inner overflow wrapper. overflow-x stays hidden so a
+   theme's own vertical scroll can never fight the parent .screens filmstrip's
+   horizontal swipe-between-screens gesture on the same axis. */
+.screen-pane { flex: 0 0 100%; scroll-snap-align: start; height: 100%; overflow-y: auto; overflow-x: hidden; position: relative; padding: 44px 16px 44px; display: flex; flex-direction: column; }
+/* Covers .screen-pane's own scroll (above) AND any inner scroll region a
+   theme adds itself (a fixed header/tab-bar with only a middle content band
+   scrolling underneath -- a legitimate, common native pattern distinct from
+   scrolling the whole pane). Neither should ever show a visible scrollbar
+   track: no real iOS/Android app does, and Chrome/Windows' default scrollbar
+   rendering is the single most obvious tell that a "native app" screen is
+   actually an HTML page. */
+.screen-pane, .screen-pane * { scrollbar-width: none; }
+.screen-pane::-webkit-scrollbar, .screen-pane *::-webkit-scrollbar { display: none; }
+.screen-pane .safe-top { position: absolute; top: 0; left: 0; right: 0; height: 44px; }
+.screen-pane .safe-bottom { position: absolute; bottom: 0; left: 0; right: 0; height: 30px; }
+
+/* Mobile screen content (.m-logo, .m-h, .m-btn, etc.) retired as of the
+   bespoke-composition rewrite's Phase 3 -- each theme's own surfaces/mobile.css
+   (written by surface-composer) now styles its own screen content directly.
+   Only .screen-pane's base geometry above (safe-area padding, flex layout)
+   stays shared -- that is physical device-frame chrome, not a design choice. */
+
+@keyframes shimmer { 0% { transform: translateX(-100%); } 100% { transform: translateX(100%); } }
+/* Web-app skeleton/loading state — mirrors the retired .m-skel's shimmer keyframe for the app surface. */
+.app-skeleton { display: flex; flex-direction: column; gap: 12px; }
+.skel-line { height: 12px; border-radius: var(--tf-r-sm, 4px); position: relative; overflow: hidden; background: var(--tf-border); }
+.skel-line::after { content: ""; position: absolute; inset: 0; background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--tf-text) 8%, transparent), transparent); animation: shimmer 1.4s infinite; }
+.skel-line.w30 { width: 30%; } .skel-line.w40 { width: 40%; } .skel-line.w45 { width: 45%; }
+.skel-line.w50 { width: 50%; } .skel-line.w60 { width: 60%; } .skel-line.w70 { width: 70%; }
+@keyframes spin { to { transform: rotate(360deg); } }
+/* Inline loading-button spinner — sits before the "Loading" label. */
+.btn-spinner {
+  display: inline-block; width: 14px; height: 14px; margin-right: 8px;
+  border: 2px solid color-mix(in srgb, currentColor 30%, transparent);
+  border-top-color: currentColor; border-radius: 50%;
+  animation: spin var(--tf-dur-normal, 800ms) linear infinite; vertical-align: -2px;
+}
+/* Vertical divider between hero-stats entries (e.g. "3,200+ · 98% · 7am"). */
+.stat-div {
+  display: inline-block; width: 1px; height: 0.9em; background: currentColor;
+  opacity: 0.3; margin-inline: 10px; vertical-align: middle;
+}
+.screen-dots { display: flex; gap: 6px; justify-content: center; margin-top: 4px; }
+.screen-dots button { width: 26px; height: 26px; display: grid; place-items: center; background: transparent; border: 0; cursor: pointer; padding: 0; }
+.screen-dots button i { display: block; width: 7px; height: 7px; border-radius: 50%; background: rgba(255,255,255,.28); }
+.screen-dots button[aria-current="true"] i { background: var(--c-text); }
+
+/* dev-build badge on a native glass element */
+.glass-badge { position: absolute; z-index: 10; top: 46px; right: 8px; font-family: var(--c-mono, monospace); font-size: 11px; padding: 2px 5px; background: rgba(0,0,0,.6); color: #ffd479; border-radius: 4px; }
+
+/* NATIVE HONESTY: this used to enforce Android's neutral blurred-elevation vs
+   iOS's real (possibly colored) shadow centrally, for the retired shared .m-*
+   classes. Each theme's own surfaces/mobile.css now owns this distinction
+   directly -- respond to the .device.ios / .device.android ancestor class for
+   any elevated or blurred-backdrop element (see agents/surface-composer.md's
+   mobile per-surface notes). */
+
+/* ── brand panel ─────────────────────────────────────────────────────────── */
+.surface-brand {
+  display: none;
+  padding: 2rem 2.5rem;
+  overflow-y: auto;
+  height: 100%;
+  box-sizing: border-box;
+  max-width: 960px;
+  margin: 0 auto;
+}
+.surface-brand.is-active { display: block; }
+
+.brand-panel { display: none; }
+.brand-panel.is-active { display: block; }
+
+.brand-section {
+  margin-bottom: 2.5rem;
+  border-bottom: 1px solid var(--c-line);
+  padding-bottom: 2rem;
+}
+.brand-section:last-child { border-bottom: none; }
+
+.brand-section-title {
+  font-size: 0.6875rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--tf-text-muted);
+  margin: 0 0 1rem;
+  font-weight: 600;
+  font-family: var(--c-ui);
+}
+
+/* brand sheet */
+.brand-sheet { display: flex; gap: 2rem; align-items: flex-start; flex-wrap: wrap; }
+.brand-wordmark { max-width: 320px; }
+.brand-wordmark svg { width: 100%; height: auto; max-height: 80px; display: block; }
+.brand-sizes { display: flex; gap: 1.5rem; align-items: flex-end; flex-wrap: wrap; }
+.brand-size-item { display: flex; flex-direction: column; align-items: center; gap: 0.375rem; }
+.brand-mark-wrap { overflow: hidden; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.brand-mark-wrap svg { width: 100%; height: 100%; }
+.brand-size-label { font-size: 0.6875rem; color: var(--tf-text-muted); font-variant-numeric: tabular-nums; font-family: var(--c-mono); }
+
+/* motion */
+.motion-previews { display: flex; gap: 1.25rem; flex-wrap: wrap; align-items: flex-start; }
+.motion-item { display: flex; flex-direction: column; align-items: center; gap: 0.375rem; }
+.motion-preview {
+  width: 80px; height: 80px;
+  background: var(--c-panel-2);
+  border: 1px solid var(--c-line);
+  border-radius: 10px;
+  padding: 4px;
+  display: flex; align-items: center; justify-content: center;
+  overflow: hidden;
+}
+.motion-preview svg { width: 56px; height: 56px; }
+.motion-label { font-size: 0.6875rem; color: var(--tf-text-muted); font-family: var(--c-ui); }
+
+/* icons grid */
+.icons-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(68px, 1fr));
+  gap: 0.625rem;
+}
+.icon-cell { display: flex; flex-direction: column; align-items: center; gap: 0.3125rem; }
+.icon-preview {
+  width: 48px; height: 48px;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--c-panel-2);
+  border: 1px solid var(--c-line);
+  border-radius: 8px;
+}
+.icon-preview svg { width: 24px; height: 24px; }
+.icon-name { font-size: 0.6875rem; color: var(--tf-text-muted); text-align: center; word-break: break-all; font-family: var(--c-mono); line-height: 1.3; }
+
+/* illustrations */
+.illustrations-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 1rem;
+}
+.illus-cell { display: flex; flex-direction: column; align-items: center; gap: 0.4375rem; }
+.illus-preview {
+  width: 100%; aspect-ratio: 4/3;
+  background: var(--c-panel-2);
+  border: 1px solid var(--c-line);
+  border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  overflow: hidden;
+  padding: 0.75rem;
+  box-sizing: border-box;
+}
+.illus-preview svg { width: 100%; height: 100%; }
+.illus-name { font-size: 0.6875rem; color: var(--tf-text-muted); font-family: var(--c-mono); }
+
+/* avatars */
+.avatars-row { display: flex; gap: 0.75rem; flex-wrap: wrap; align-items: center; }
+.avatar-item {
+  width: 48px; height: 48px;
+  border-radius: 50%;
+  overflow: hidden;
+  background: var(--c-panel-2);
+  border: 1px solid var(--c-line);
+  flex-shrink: 0;
+}
+.avatar-item svg { width: 48px; height: 48px; display: block; }
+
+/* imagery brief */
+.imagery-placeholder {
+  background: var(--c-panel-2);
+  border: 1px dashed var(--c-line-2);
+  border-radius: 8px;
+  padding: 1rem 1.25rem;
+}
+.imagery-brief {
+  font-size: 0.75rem;
+  line-height: 1.65;
+  white-space: pre-wrap;
+  word-break: break-word;
+  margin: 0;
+  color: var(--c-text-dim);
+  font-family: var(--c-ui);
+}
+
+/* asset inventory */
+.inventory-wrap { overflow-x: auto; border-radius: 6px; border: 1px solid var(--c-line); padding: 4px; }
+.inventory-table { width: 100%; border-collapse: collapse; font-size: 0.6875rem; }
+.inventory-table th,
+.inventory-table td { padding: 0.375rem 0.75rem; text-align: left; border-bottom: 1px solid var(--c-line); }
+.inventory-table tbody tr:last-child td { border-bottom: none; }
+.inventory-table th { font-weight: 600; color: var(--c-text-faint); background: var(--c-panel-2); font-family: var(--c-ui); }
+.native-note { color: var(--tf-text-muted); max-width: 300px; font-family: var(--c-ui); }
+
+/* native differences */
+.native-diff { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.5rem; }
+.native-diff li { font-size: 0.75rem; color: var(--c-text-dim); }
+
+/* badges */
+.asset-badge {
+  display: inline-block;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  padding: 0.125rem 0.4rem;
+  border-radius: 3px;
+  background: var(--c-panel-2);
+  color: var(--c-text-dim);
+  border: 1px solid var(--c-line);
+  margin-left: 0.25rem;
+  font-family: var(--c-mono);
+}
+.asset-badge.badge-ok { background: rgba(100,209,154,0.15); color: var(--c-ok); border-color: rgba(100,209,154,0.3); }
+.asset-badge.badge-warn { background: rgba(224,182,79,0.15); color: var(--c-warn); border-color: rgba(224,182,79,0.3); }
+
+/* empty state */
+.brand-empty {
+  padding: 3rem;
+  text-align: center;
+  color: var(--tf-text-muted);
+  font-size: 0.875rem;
+  font-family: var(--c-ui);
+  line-height: 1.6;
+}
+
+/* ── interaction layer ───────────────────────────────────────────────────────
+   Every transition here uses --tf-dur-* and --tf-ease-* so it automatically
+   adapts to the active theme's motion character when the gallery inlines
+   motion.css. Fallback values are safe-but-snappy (no character preference).
+   ─────────────────────────────────────────────────────────────────────────── */
+
+/* Table rows */
+tbody tr {
+  transition: background var(--tf-dur-instant, 80ms) ease;
+  cursor: pointer;
+}
+tbody tr:hover { background: color-mix(in srgb, var(--tf-primary) 6%, var(--tf-surface)); }
+
+/* Success/empty-state pop — NOT retired shared vocabulary; every theme's own
+   brand/motion/motion.css extends this exact keyframe (see its own comments)
+   even though no current bespoke surface triggers it yet. */
+@keyframes tf-success-pop {
+  0%   { transform: scale(0.7); opacity: 0; }
+  60%  { transform: scale(1.12); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+/* ── Composition layouts ── */
+
+/* Page-load animation classes — the same endorsed motion-utility contract as
+ * @keyframes tf-enter / .tf-stagger > .tf-fade-up above (not retired shared
+ * component vocabulary). Every theme's own brand/motion/motion.css extends
+ * these exact classes with character-specific curves.
+ * NEVER use var(--tf-ease) in an animation shorthand: if the variable resolves to
+ * "None" (a Python serialization artefact) the parser treats it as animation-name,
+ * silently overriding the intended name and producing animation-name: none.
+ * Use hardcoded fallback easing here; theme motion.css may override timing-function. */
+.tf-page-load > * { animation: tf-enter var(--tf-dur-normal, 460ms) cubic-bezier(.22,.61,.36,1) both; animation-delay: calc(var(--i, 0) * 70ms); }
+.tf-fade-up { animation: tf-enter var(--tf-dur-normal, 460ms) cubic-bezier(.22,.61,.36,1) both; animation-delay: calc(var(--i, 0) * 70ms); }
+.tf-fade-in { animation: tf-fadein var(--tf-dur-normal, 460ms) ease both; animation-delay: calc(var(--i, 0) * 70ms); }
+@keyframes tf-fadein { from { opacity: 0; } to { opacity: 1; } }
+
+/* Scroll reveal — intersection observer adds .is-visible via JS in gallery */
+.tf-reveal { opacity: 0; transform: translateY(14px); transition: opacity var(--tf-dur-normal, 460ms) cubic-bezier(.22,.61,.36,1), transform var(--tf-dur-normal, 460ms) cubic-bezier(.22,.61,.36,1); }
+.tf-reveal.is-visible, .surface:not(.is-active) .tf-reveal { opacity: 1; transform: none; }
+
+/* Stagger container — applies --i delay to direct children */
+.tf-stagger > * { animation: tf-enter var(--tf-dur-normal, 460ms) cubic-bezier(.22,.61,.36,1) both; animation-delay: calc(var(--i, 0) * 80ms + 60ms); }
+
+/* Reduced motion — collapse all composition animations */
+@media (prefers-reduced-motion: reduce) {
+  .tf-page-load > *, .tf-fade-up, .tf-fade-in, .tf-stagger > * { animation-duration: 0.01ms !important; }
+  .tf-reveal { opacity: 1; transform: none; transition-duration: 0.01ms !important; }
+}
+
+/* ----------------------------------------------------------------- narrow-viewport chrome
+ * A tool that judges mobile design has to open on a phone. Below ~700px the
+ * fixed two-column grid (a 264px rail plus content) doesn't fit a real phone
+ * viewport (~375-430px) at all -- confirmed by design-critic measuring
+ * scrollWidth 699px against a 393px clientWidth, meaning the rail never
+ * collapsed and the stage sat off-screen.
+ *
+ * This block is placed at the END of the file on purpose: every selector
+ * here (.g-meta .pair, .compare-surface, .app-frame) has an equal-specificity
+ * base rule declared earlier in this same file, and CSS resolves an
+ * equal-specificity tie by source order, not by which @media block "sounds"
+ * more specific. An earlier draft of this fix placed the override near
+ * .app-frame's own base rule at the top of the file and every property
+ * silently lost the cascade back to the base rule, despite the media query
+ * correctly matching -- confirmed by a live 393px-viewport render still
+ * showing display:flex on elements this block sets to display:none.
+ */
+@media (max-width: 700px) {
+  .app-frame {
+    grid-template-columns: 1fr;
+    grid-template-areas: "header" "stage";
+  }
+  /* Grid blowout guard: a bare "1fr" track is really minmax(auto, 1fr) --
+     its implicit minimum is the content's min-content size, not 0. A wide
+     embedded desktop-scale theme preview inside .g-stage can silently force
+     this whole track (and the document) wider than the viewport even though
+     .g-stage itself declares overflow:hidden, because overflow only clips
+     content that overflows the box -- it does nothing if the box itself is
+     what grew. minmax(0, 1fr) is the actual fix; 1fr alone is not. */
+  .app-frame { grid-template-columns: minmax(0, 1fr); }
+  #railToggle { display: inline-flex; }
+  .g-meta .pair { display: none; } /* project/generated/knowledge meta -- keep verification pill + select button */
+  .g-rail {
+    position: fixed;
+    top: var(--header-h);
+    left: 0;
+    bottom: 0;
+    width: min(85vw, 320px);
+    z-index: 40;
+    transform: translateX(-100%);
+    transition: transform 200ms ease-out;
+    box-shadow: 4px 0 24px rgba(0, 0, 0, .4);
+  }
+  .app-frame.rail-open .g-rail { transform: translateX(0); }
+  .rail-scrim {
+    display: none;
+    position: fixed;
+    inset: var(--header-h) 0 0 0;
+    background: rgba(0, 0, 0, .5);
+    z-index: 30;
+  }
+  .app-frame.rail-open .rail-scrim { display: block; }
+  /* Compare grid: three equal columns has no room on a real phone viewport.
+     minmax(0, 1fr), not 1fr, for the same grid-blowout reason as .app-frame. */
+  .compare-surface { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 700px) and (prefers-reduced-motion: reduce) {
+  .g-rail { transition: none; }
+}
+

@@ -1,0 +1,440 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://theme-forge/theme.schema.json",
+  "title": "Theme Forge theme.json",
+  "description": "Canonical, dual-resolved theme record. Every value that differs across platforms carries both resolutions: a color is {css, hex}, a dimension is {css, px}, a shadow is {css, ios, android}.",
+  "type": "object",
+  "required": ["schema", "slug", "name", "slot", "direction", "thesis", "platforms", "color", "typography", "space", "radius", "elevation", "motion", "brand", "composition", "assets", "dials"],
+  "additionalProperties": true,
+  "$defs": {
+    "colorValue": {
+      "type": "object",
+      "required": ["hex"],
+      "properties": {
+        "css": { "type": "string" },
+        "hex": { "type": "string", "pattern": "^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$" },
+        "rgba": { "type": "string" }
+      },
+      "additionalProperties": true
+    },
+    "dimension": {
+      "type": "object",
+      "required": ["px"],
+      "properties": {
+        "css": { "type": ["string", "number"] },
+        "px": { "type": "number" }
+      },
+      "additionalProperties": true
+    },
+    "semanticColors": {
+      "type": "object",
+      "required": ["background", "surface", "text", "text-muted", "border", "primary", "on-primary", "accent", "on-accent", "focus-ring"],
+      "additionalProperties": { "$ref": "#/$defs/colorValue" }
+    },
+    "surfaceLayoutSignature": {
+      "type": "object",
+      "description": "One surface's self-declared structural facts, written by surface-composer after building that surface. Free-text throughout — layout_family is deliberately not an enum (see composition.layout_signature).",
+      "properties": {
+        "layout_family": { "type": "string", "description": "Short free label for this surface's composition, e.g. 'diagonal-split-hero' or 'left-rail-dashboard'. Not enum-constrained, not uniqueness-gated." },
+        "section_count": { "type": "integer", "description": "Website/webapp: count of top-level structural sections. Not used for mobile." },
+        "screen_count": { "type": "integer", "description": "Mobile only: count of distinct screens authored." },
+        "nav_style": { "type": "string", "description": "One phrase describing this surface's own navigation, in the author's own words." },
+        "primary_grid": { "type": "string", "description": "One phrase describing the dominant layout mechanism, e.g. '12-column asymmetric grid' or 'single flexible column'." },
+        "notes": { "type": "string", "description": "One sentence of anything else worth flagging for design-critic's structural-distinctiveness pass." }
+      },
+      "additionalProperties": true
+    },
+    "shadowLevel": {
+      "type": "object",
+      "required": ["ios", "android"],
+      "properties": {
+        "css": { "type": "string" },
+        "ios": {
+          "type": "object",
+          "required": ["shadowColor", "shadowOffset", "shadowOpacity", "shadowRadius"],
+          "additionalProperties": true
+        },
+        "android": {
+          "type": "object",
+          "required": ["elevation"],
+          "properties": { "elevation": { "type": "integer" } },
+          "not": {
+            "anyOf": [
+              { "required": ["shadowColor"] },
+              { "required": ["shadowOffset"] },
+              { "required": ["color"] }
+            ]
+          },
+          "additionalProperties": true
+        }
+      },
+      "additionalProperties": true
+    },
+    "fontRole": {
+      "type": "object",
+      "required": ["family", "css_fallback", "weights", "source", "native"],
+      "properties": {
+        "family": { "type": "string" },
+        "css_fallback": { "type": "string" },
+        "weights": { "type": "array", "items": { "type": "integer" }, "minItems": 1 },
+        "variable": { "type": "boolean" },
+        "source": { "type": "string" },
+        "native": {
+          "type": "object",
+          "required": ["families", "fallback_ios", "fallback_android"],
+          "properties": {
+            "package": { "type": ["string", "null"] },
+            "families": {
+              "type": "object",
+              "minProperties": 1,
+              "additionalProperties": { "type": "string" }
+            },
+            "fallback_ios": { "type": "string" },
+            "fallback_android": { "type": "string" }
+          },
+          "additionalProperties": true
+        }
+      },
+      "additionalProperties": true
+    }
+  },
+  "properties": {
+    "schema": { "enum": [2, 3] },
+    "slug": { "type": "string", "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$" },
+    "name": { "type": "string" },
+    "slot": { "type": "string", "enum": ["A", "B", "C", "D", "E", "F"] },
+    "direction": { "type": "string" },
+    "thesis": { "type": "string" },
+    "rationale": { "type": "string" },
+    "platforms": {
+      "type": "array",
+      "items": { "type": "string", "enum": ["web", "native"] },
+      "minItems": 1
+    },
+    "native_notes": { "type": "string" },
+    "color": {
+      "type": "object",
+      "required": ["ramps", "semantic", "light", "dark"],
+      "properties": {
+        "ramps": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": { "$ref": "#/$defs/colorValue" }
+          }
+        },
+        "semantic": {
+          "type": "object",
+          "required": ["success", "warning", "danger", "info"],
+          "additionalProperties": { "$ref": "#/$defs/colorValue" }
+        },
+        "light": { "$ref": "#/$defs/semanticColors" },
+        "dark": { "$ref": "#/$defs/semanticColors" }
+      },
+      "additionalProperties": true
+    },
+    "typography": {
+      "type": "object",
+      "required": ["display", "body", "mono", "scale", "leading", "tracking"],
+      "properties": {
+        "display": { "$ref": "#/$defs/fontRole" },
+        "body": { "$ref": "#/$defs/fontRole" },
+        "mono": { "$ref": "#/$defs/fontRole" },
+        "scale": {
+          "type": "object",
+          "required": ["ratio", "steps"],
+          "properties": {
+            "ratio": { "type": "number" },
+            "steps": {
+              "type": "object",
+              "minProperties": 1,
+              "additionalProperties": { "$ref": "#/$defs/dimension" }
+            }
+          },
+          "additionalProperties": true
+        },
+        "leading": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "required": ["css", "px_at_base"],
+            "properties": {
+              "css": { "type": "number" },
+              "px_at_base": { "type": "number" }
+            }
+          }
+        },
+        "tracking": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "required": ["css", "px_at_base"],
+            "properties": {
+              "css": { "type": ["string", "number"] },
+              "px_at_base": { "type": "number" }
+            }
+          }
+        }
+      },
+      "additionalProperties": true
+    },
+    "space": {
+      "type": "object",
+      "required": ["unit", "scale"],
+      "properties": {
+        "unit": { "type": "number" },
+        "scale": { "type": "array", "items": { "type": "number" }, "minItems": 3 }
+      },
+      "additionalProperties": true
+    },
+    "radius": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": { "$ref": "#/$defs/dimension" }
+    },
+    "elevation": {
+      "type": "object",
+      "required": ["strategy", "native_strategy", "levels"],
+      "properties": {
+        "strategy": { "type": "string", "enum": ["shadow", "border", "glass"] },
+        "native_strategy": { "type": "string", "enum": ["shadow", "border", "elevation", "blur"] },
+        "levels": {
+          "type": "object",
+          "minProperties": 1,
+          "additionalProperties": { "$ref": "#/$defs/shadowLevel" }
+        },
+        "glass": { "type": "object" }
+      },
+      "additionalProperties": true
+    },
+    "motion": {
+      "type": "object",
+      "required": ["character", "duration", "easing", "signature", "signature_type", "motion_budget"],
+      "properties": {
+        "character": { "type": "string", "enum": ["crisp", "springy", "calm", "mechanical"] },
+        "duration": {
+          "type": "object",
+          "additionalProperties": { "type": "number" }
+        },
+        "easing": { "type": "object" },
+        "notes": { "type": "string" },
+        "signature": {
+          "type": "string",
+          "description": "Multi-sentence PROSE description of this theme's signature interaction — the mechanics, timing, and feel, written for a human reader (design-critic, the end user comparing themes). NOT machine-comparable and NOT interchangeable with signature_type: two themes' prose descriptions will never collide even when they describe the exact same interaction, so nothing may ever read this field for uniqueness gating. If you only have one thing to say about the signature motion, put it in signature_type and write this field anyway — both are required."
+        },
+        "signature_type": {
+          "type": "string",
+          "description": "Short kebab-case slug (e.g. magnetic-buttons, targeting-reticle-draw, draw-on-scroll) — the ONLY field any script may read for cross-theme signature-motion uniqueness gating (tf_distinct.py Gate 8, tf_ledger.py's used.md column, tf_distinct.py Gate 19's ledger check). Never fall back to `signature` (prose, wrong shape for exact-match comparison) or any field named `signature_motion` (retired; a three-way fallback across signature_type/signature/visual.signature_motion previously masked a real bug where tf_ledger.py silently recorded motion.character in this column instead — see tf_ledger.py's _build_row for the history). If this field is missing, that is the defect to report — do not substitute a different field."
+        },
+        "motion_budget": {
+          "type": "object",
+          "description": "Per-surface motion budget. website=full delight; webapp=near-imperceptible (no decorative entrances on data); mobile is per-screen.",
+          "properties": {
+            "website": { "type": "string", "enum": ["full", "moderate", "minimal"] },
+            "webapp": { "type": "string", "enum": ["near-imperceptible", "minimal", "moderate"] },
+            "mobile": {
+              "type": "object",
+              "additionalProperties": { "type": "string", "enum": ["delight", "feedback-only", "minimal"] }
+            }
+          },
+          "additionalProperties": true
+        }
+      },
+      "additionalProperties": true
+    },
+    "brand": {
+      "type": "object",
+      "required": ["concept", "logo", "logomark", "wordmark", "icon", "favicon"],
+      "additionalProperties": true
+    },
+    "icons": { "type": "object" },
+    "surfaces": { "type": "object" },
+    "requires_packages": { "type": "array", "items": { "type": "string" } },
+    "requires_dev_build": { "type": "boolean" },
+    "a11y": { "type": "object" },
+    "native": { "type": "object" },
+
+    "dials": {
+      "type": "object",
+      "description": "Numeric intensity dials derived from the brief. Each dial is 1–10. Used to ensure the six themes span the brief's range rather than clustering at one intensity.",
+      "required": ["design_variance", "motion_intensity", "visual_density"],
+      "properties": {
+        "design_variance": {
+          "type": "integer", "minimum": 1, "maximum": 10,
+          "description": "1=strict symmetry and predictable grid; 10=artsy chaos, broken grid, unexpected layout"
+        },
+        "motion_intensity": {
+          "type": "integer", "minimum": 1, "maximum": 10,
+          "description": "1=static (no motion beyond feedback); 10=cinematic (scroll-driven, parallax, theatrical). Applies to website surface only — webapp and mobile are governed by motion_budget."
+        },
+        "visual_density": {
+          "type": "integer", "minimum": 1, "maximum": 10,
+          "description": "1=gallery white space, one focal point per screen; 10=cockpit density, maximum information"
+        }
+      },
+      "additionalProperties": false
+    },
+
+    "composition": {
+      "type": "object",
+      "description": "As of the bespoke-composition rewrite (2026-09-03), this block no longer selects from a shared partial library — there is no shared library. hero_archetype/section_inventory/grid_strategy/nav_pattern/density were retired because they were closed-enum or exact-list fields whose only purpose was picking one of a small fixed set of shared HTML templates (see git history for the old shape). Composition is now free-form, authored per theme by the surface-composer agent, and described here in prose (structural_brief) plus self-declared facts (layout_signature) rather than constrained to a fixed vocabulary.",
+      "required": ["structural_brief", "design_language", "intensity", "ambition"],
+      "properties": {
+        "design_language": {
+          "type": "string",
+          "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$",
+          "description": "Named direction for this slot as a kebab-case slug. Locks reference aesthetic, font pairing register, palette family, and motion register. No two themes in a set may share a design language — enforced by tf_distinct.py Gate 11, which compares by exact match, which is why this is a slug and not prose. OPEN VOCABULARY as of 2026-09-09, with NO DEFAULT SET as of 2026-09-10. Where the brief names styles, the value is the brief's own word ('minimalism', 'retro', 'neobrutalism', 'hand-drawn', 'parallax-scrolling'); where it names none, the orchestrator derives six distinct slugs from the brief's subject matter, audience and domain, so that different briefs yield genuinely different vocabularies. This field was a closed six-value enum until 2026-09-09, and those six stock values were removed from every artifact on 2026-09-10 so nothing can silently fall back to them. Both changes had one cause: it was the last survivor of the closed-enum family the bespoke-composition rewrite removed (hero_archetype, nav_pattern, grid_strategy, density, section_inventory), and six fixed values for six slots makes distinctness arithmetically forced rather than earned. The concrete failure was that it could not accept a brief's own vocabulary — a brief naming 'Minimalism, Retro, Progressive, Neobrutalism, Hand-drawn, Parallax scrolling' had to be mapped lossily onto registers that do not contain those ideas (a scroll technique and a tonal register are orthogonal), and composition.additionalProperties:false meant the real style could not even be recorded alongside. Follows the pattern motion.signature_type already uses: free-form slug, hard-gated for uniqueness, no enum. Anti-convergence comes from the uniqueness gate, not from the vocabulary being closed. tf_motion_cohesion.py (Gate 20) holds no register lookup at all, so every theme's motion is judged by design-critic against its own composition.ambition."
+        },
+        "structural_brief": {
+          "type": "string",
+          "description": "2-5 sentences of genuine creative direction for how this theme's website/webapp/mobile surfaces should be composed — e.g. 'fixed-left icon rail, no top nav; hero is a diagonal clip-path split with the product shot bleeding past the divider.' This is authored direction for the surface-composer agent to build from, not a template name and not itself gated for cross-theme uniqueness (tf_structure.py measures the resulting rendered structure instead — see Gate 18)."
+        },
+        "layout_signature": {
+          "type": "object",
+          "description": "Written by surface-composer AFTER each surface is built (not by theme-designer) — one entry per surface it has completed. Self-declared facts for design-critic's narrative context and as raw input to tf_structure.py's mechanical similarity gate. layout_family is a short free label and is explicitly NOT enum-constrained or uniqueness-gated — recreating a closed vocabulary here would reintroduce the exact pigeonhole problem this rewrite exists to remove.",
+          "properties": {
+            "website": { "$ref": "#/$defs/surfaceLayoutSignature" },
+            "webapp": { "$ref": "#/$defs/surfaceLayoutSignature" },
+            "mobile": { "$ref": "#/$defs/surfaceLayoutSignature" }
+          },
+          "additionalProperties": false
+        },
+        "intensity": {
+          "type": "string",
+          "enum": ["distilled", "quiet", "balanced", "bold", "overdrive"],
+          "description": "Impeccable intensity axis. distilled=fewest elements, no decoration, motion only where functional. quiet=restrained palette, borders over shadows, sub-200ms motion. balanced=default middle ground. bold=saturated, larger type contrast, visible signature motion. overdrive=one technically extraordinary effect anchors the theme."
+        },
+        "ambition": {
+          "type": "string",
+          "description": "One to three sentences stating what this theme is deliberately trying to prove or achieve — the design bet. The design-critic evaluates it as met / partially-met / abandoned. Must be specific enough to fail: 'looks good' is not an ambition."
+        }
+      },
+      "additionalProperties": false,
+      "_comment_additionalProperties": "false, not true: this is the exact block where hero_archetype/section_inventory/grid_strategy/nav_pattern/density lived before the bespoke-composition rewrite retired them. additionalProperties:true here would silently accept any of those names resurfacing (e.g. from a stale prompt template or a copy-pasted older example) instead of failing loudly. tf_schema_check.py enforces this."
+    },
+
+    "assets": {
+      "type": "object",
+      "required": ["hero_visual", "decorative_system", "dataviz_treatment"],
+      "properties": {
+        "hero_visual": {
+          "type": "string",
+          "description": "Concept-driven key visual in the hero — composition, subject matter, and art direction."
+        },
+        "decorative_system": {
+          "type": "string",
+          "description": "2-3 recurring shape-grammar elements that create visual consistency across surfaces."
+        },
+        "dataviz_treatment": {
+          "type": "string",
+          "description": "How this theme renders charts and data visualisations — style, color mapping, and line weight."
+        },
+        "motion": {
+          "type": "object",
+          "properties": {
+            "logo_draw":             { "type": "string" },
+            "spinner":               { "type": "string" },
+            "success":               { "type": "string" },
+            "error":                 { "type": "string" },
+            "css":                   { "type": "string" },
+            "native":                { "type": "string" },
+            "technique":             { "type": "string", "enum": ["smil", "css", "both"] },
+            "reduced_motion_handled":{ "type": "boolean" }
+          },
+          "additionalProperties": true
+        },
+        "illustrations": {
+          "type": "object",
+          "properties": {
+            "strategy":     { "type": "string", "enum": ["geometric", "none", "brief"],
+                              "description": "geometric: 6 abstract SVGs from the theme's shape grammar. none: no illustrations shipped (representational scenes need custom art). brief: art-direction doc written, no SVGs." },
+            "style":        { "type": "string", "enum": ["geometric", "isometric", "line", "blob"] },
+            "derived_from": { "type": "array", "items": { "type": "string" } },
+            "files":        { "type": "array", "items": { "type": "string" } }
+          },
+          "additionalProperties": true
+        },
+        "icons": {
+          "type": "object",
+          "properties": {
+            "library":              { "type": "string" },
+            "source_license":       { "type": "string" },
+            "stroke":               { "type": "number" },
+            "restyled":             { "type": "boolean" },
+            "count":                { "type": "integer" },
+            "attribution_required": { "type": "boolean" },
+            "manifest":             { "type": "string" }
+          },
+          "additionalProperties": true
+        },
+        "avatars": {
+          "type": "object",
+          "properties": {
+            "system":                { "type": "string" },
+            "style":                 { "type": "string" },
+            "license":               { "type": "string" },
+            "attribution_required":  { "type": "boolean" },
+            "palette_applied":       { "type": "boolean" },
+            "offline_fallback_used": { "type": "boolean" },
+            "config":                { "type": "string" }
+          },
+          "additionalProperties": true
+        },
+        "imagery": {
+          "type": "object",
+          "properties": {
+            "strategy":             { "type": "string", "enum": ["brief", "stock", "generated"] },
+            "provider":             { "type": ["string", "null"] },
+            "attribution_required": { "type": "boolean" },
+            "brief":                { "type": "string" }
+          },
+          "additionalProperties": true
+        },
+        "three_d": {
+          "type": "object",
+          "properties": {
+            "strategy":          { "type": "string", "enum": ["none", "css3d", "procedural"] },
+            "notes":             { "type": "string" },
+            "requires_packages": { "type": "array", "items": { "type": "string" } }
+          },
+          "additionalProperties": true
+        }
+      },
+      "additionalProperties": true
+    },
+
+    "platform_assets": {
+      "type": "object",
+      "properties": {
+        "web":    { "type": "array", "items": { "type": "string" } },
+        "native": { "type": "array", "items": { "type": "string" } },
+        "native_rasterized": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["source", "reason"],
+            "properties": {
+              "source": { "type": "string" },
+              "reason": { "type": "string" }
+            },
+            "additionalProperties": false
+          }
+        }
+      },
+      "additionalProperties": true
+    },
+
+    "licensing": {
+      "type": "object",
+      "required": ["attribution_required", "notices"],
+      "properties": {
+        "attribution_required": { "type": "boolean" },
+        "notices": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      },
+      "additionalProperties": true
+    }
+  }
+}

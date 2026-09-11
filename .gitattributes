@@ -1,0 +1,23 @@
+# Normalize line endings on commit; check out with platform endings.
+* text=auto
+
+# Shell scripts must always have LF — CRLF breaks the shebang on Linux/macOS.
+*.sh           text eol=lf
+.githooks/*    text eol=lf
+
+# These files are always LF regardless of platform.
+*.py           text eol=lf
+Makefile       text eol=lf
+
+# Binary files — no line-ending conversion.
+*.png          binary
+*.jpg          binary
+*.jpeg         binary
+*.gif          binary
+*.ico          binary
+*.svg          binary
+*.woff         binary
+*.woff2        binary
+*.ttf          binary
+*.otf          binary
+*.zip          binary

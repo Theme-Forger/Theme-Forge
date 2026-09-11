@@ -1,0 +1,25 @@
+/* a11y-reset.css — the one CSS file every theme shares, and the only one.
+   Pure behavior/accessibility baseline: zero visual identity, zero layout
+   opinion. Replaces surface.atoms.css's shared component vocabulary, which
+   this rewrite retired — this file is not a replacement for that vocabulary,
+   it is the narrow, confirmed exception to "no shared CSS" (see the
+   bespoke-composition implementation plan). Every theme's own bespoke CSS
+   (surfaces/<surface>.css) still needs its own :active/:focus-visible rules
+   for its own elements; this file only guarantees a keyboard-navigable,
+   motion-safe floor even if a theme's own CSS forgets to. */
+
+*, *::before, *::after { box-sizing: border-box; }
+
+:focus-visible {
+  outline: 2px solid var(--tf-focus-ring, currentColor);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

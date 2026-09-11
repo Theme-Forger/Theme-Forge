@@ -1,0 +1,19 @@
+{
+  "name": "theme-forge",
+  "displayName": "Theme Forge",
+  "version": "0.2.0",
+  "description": "Generates six research-backed design themes from a project brief, previews them across website / web app / mobile surfaces, and applies the chosen one to your web or React Native codebase.",
+  "keywords": ["design", "themes", "ui", "ux", "design-system", "branding", "react-native", "expo"],
+  "author": { "name": "Theme Forge" },
+  "license": "MIT",
+  "homepage": "https://github.com/Theme-Forger/theme-forge",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Theme-Forger/theme-forge.git",
+    "directory": "plugins/theme-forge"
+  },
+  "bugs": {
+    "url": "https://github.com/Theme-Forger/theme-forge/issues"
+  },
+  "hooks": "./hooks/hooks.json"
+}
