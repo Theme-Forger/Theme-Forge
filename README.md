@@ -131,6 +131,7 @@ Or add the marketplace to your `~/.claude/settings.json` permanently:
 ```bash
 git clone https://github.com/Theme-Forger/theme-forge.git
 cd theme-forge
+sh bootstrap.sh          # wires commit hooks — run once after cloning
 claude --plugin-dir plugins/theme-forge
 ```
 
