@@ -216,11 +216,31 @@ most common; check webapp/mobile too).
 
 ## Step 3 — Verify
 
-Run, in this order:
+**Refresh the preview before you lint it.** `tf_slop.py` (Gate B) and
+`tf_motion_audit.py` read the *assembled* `preview.html`, not `surfaces/` — correctly, since
+impeccable needs one self-contained document with tokens resolved and `@scope` applied. So an
+edit to `surfaces/webapp.css` is invisible to Gate B until the preview is rebuilt, and the
+gate will happily report a verdict on the **previous** version of your file, as a pass:
 
 ```bash
+python "<plugin_root>/scripts/tf_gallery.py" --preview-only "<theme_dir>" --json
 python "<plugin_root>/scripts/tf_slop.py" --theme "<theme_dir>" --json
 ```
+
+`--preview-only` writes exactly one file — your theme's `preview.html`. It does not touch
+`gallery.html`, the other themes' previews, or `used.md`, so it is safe to run while other
+fixers work in parallel. It also skips the Gate A/B prechecks that a full assembly runs, which
+matters because those would otherwise refuse to build while the hard stop you are fixing still
+exists — a deadlock that previously forced fixers to hand-mirror edits into `preview.html`.
+
+If you forget, `tf_slop.py` now tells you: it compares mtimes and prints a **STALE PREVIEW**
+warning, setting `preview_stale: true` in its JSON. Treat that as "my results are meaningless",
+not as a style note. Do not hand-edit `preview.html` — it is a generated file and your edit is
+discarded on the next rebuild.
+
+One caveat: a `--preview-only` build's font `@import` carries only your theme's families
+rather than all six themes'. Text-mode linting is unaffected, but **do not use this path to
+produce review screenshots.**
 
 Confirm your fixed findings actually dropped. For anything still showing, decide: genuinely
 unfixed (say why), false positive you've now verified (say why, cite the rule logic or a live
@@ -238,11 +258,12 @@ If you touched `theme.json`:
 python "<plugin_root>/scripts/tf_native.py" --theme "<theme_dir>" --json --emit
 ```
 
-Do **not** run `tf_gallery.py` yourself if other `theme-fixer` agents are running in parallel
-this same wave — the orchestrator rebuilds the gallery once, after all of you return, to avoid
-racing on the shared `gallery.html`/`used.md` files. If you are running alone (not part of a
-parallel wave), rebuild once at the end so your own verification reflects the real assembled
-output.
+Do **not** run a *full* `tf_gallery.py` yourself if other `theme-fixer` agents are running in
+parallel this same wave — a full assembly rewrites `gallery.html`, every theme's preview and
+`used.md`, so you would race the others. The orchestrator rebuilds once, after all of you
+return. Use `--preview-only` (Step 3) for your own verification instead: that is exactly what
+it exists for, and it is race-free by construction. If you are running alone, a full rebuild at
+the end is fine.
 
 If you used a browser per §0 for any geometry-dependent fix, before closing your tab: check
 for new console errors on your theme's surfaces. Neither MCP tool set exposes a direct

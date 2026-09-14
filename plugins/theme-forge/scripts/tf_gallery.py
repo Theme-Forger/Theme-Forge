@@ -7,9 +7,17 @@ is a single Google Fonts @import, which fails gracefully to full system fallback
 stacks. Renders correctly from file:// with the network off.
 
     python3 tf_gallery.py --json [--home-run]
+    python3 tf_gallery.py --preview-only <theme-dir> --json
 
 Reads $TF_HOME/current/run.json and each theme, writes current/gallery.html and
 each theme's preview.html.
+
+--preview-only rebuilds ONE theme's preview.html and nothing else: no
+gallery.html, no sibling previews, no used.md, and no Gate A/B precheck. It
+exists so a theme-fixer can refresh the artifact Gate B actually lints
+(preview.html, not surfaces/) without racing parallel fixers or deadlocking on
+the precheck that refuses to assemble over the very hard stop being fixed.
+See _preview_only() for the full rationale and its one measured difference.
 """
 from __future__ import annotations
 
@@ -1735,10 +1743,118 @@ def _knowledge_label(paths, run: dict) -> str:
     return stamped or "not recorded"
 
 
+def _load_chrome(paths):
+    """Read the shared gallery chrome. Returns (shell, css, frames) or None.
+
+    Shared by the full assembly and the --preview-only path so a preview can
+    never be built against different chrome than the gallery it belongs to.
+    """
+    tdir = paths.templates
+    if not tdir:
+        return None
+    shell = read(tdir / "gallery.shell.html")
+    css = read(tdir / "gallery.css")
+    # a11y-reset.css: the one CSS file every bespoke theme shares (confirmed
+    # carve-out — pure accessibility/behavior, zero visual identity). Appended
+    # after gallery.css so its rules aren't accidentally overridden by
+    # shared-component specificity.
+    a11y_reset = read(tdir / "a11y-reset.css")
+    if a11y_reset:
+        css = css + "\n" + a11y_reset
+    else:
+        sys.stderr.write("tf_gallery: WARNING — templates/a11y-reset.css not found\n")
+    frames = read(tdir / "device-frames.html")
+    return shell, css, frames
+
+
+def _preview_only(paths, run: dict, theme_arg: str, want_json: bool) -> int:
+    """Rebuild ONE theme's preview.html. Touches nothing else.
+
+    Exists to break a deadlock. tf_slop.py (Gate B) and tf_motion_audit.py lint
+    the *assembled* preview.html, not surfaces/ — correctly, since impeccable
+    needs one self-contained document with tokens resolved and @scope applied.
+    But a theme-fixer that edits surfaces/webapp.css then re-runs Gate B still
+    sees the OLD verdict, because preview.html is stale until tf_gallery runs.
+
+    It could not simply run tf_gallery: a full assembly rewrites gallery.html,
+    all six previews and appends to used.md, so parallel fixers race each other
+    — and worse, main()'s Gate B precheck REFUSES to assemble while a hard stop
+    exists, which is exactly the state a fixer is trying to clear. Every fixer
+    in one real session worked around this by hand-mirroring its edit into
+    preview.html or splicing a scratchpad copy, and all of them flagged that the
+    orchestrator still had to do a real rebuild.
+
+    This path therefore deliberately skips both prechecks: it is a verification
+    aid for a mid-fix theme, and re-running it can only ever make preview.html
+    agree with surfaces/ that already exist on disk. It writes exactly one file
+    and never touches gallery.html or the ledger, so it is safe to run
+    concurrently across themes. A real assembly still has to follow.
+
+    One measured difference from a full assembly, and the only one: the font
+    @import lists this theme's families (4 on a typical theme) rather than the
+    union across all six (12). Every other byte is identical. Text-mode linting
+    is unaffected, and for a standalone preview the narrower import is arguably
+    the more correct artifact — it also surfaces a theme using a face it never
+    declared, which the union import silently masks. It does mean a screenshot
+    taken from a --preview-only build can differ from the gallery in exactly
+    that case, so do not use this path to produce review imagery.
+    """
+    d = Path(theme_arg)
+    if not d.is_absolute():
+        d = paths.current / "themes" / theme_arg if not d.exists() else d.resolve()
+    theme = load_json(d / "theme.json")
+    if not theme:
+        msg = "no theme.json under %s" % d
+        if want_json:
+            print(json.dumps({"ok": False, "error": msg}))
+        sys.stderr.write("tf_gallery: %s\n" % msg)
+        return 1
+
+    chrome = _load_chrome(paths)
+    if chrome is None:
+        if want_json:
+            print(json.dumps({"ok": False, "error": "cannot locate plugin templates"}))
+        return 1
+    shell, css, frames = chrome
+    brief = load_json(paths.brief_product_json, {}) or {}
+    meta = {
+        "project": brief.get("name") or "Your project",
+        "gen": (run.get("generated_at") or "")[:10] or "not recorded",
+        "refresh": _knowledge_label(paths, run),
+    }
+    entry = (theme, d, load_json(d / "a11y.json", {}), load_json(d / "native.json", {}))
+    primary_platform = run.get("primary_platform") or brief.get("primary_platform") or "web"
+
+    html = build(shell, css, frames, [entry], meta, primary_platform,
+                 only_theme=1, run=run)
+    out = d / "preview.html"
+    out.write_text(html, encoding="utf-8")
+
+    sys.stderr.write(
+        "tf_gallery: wrote %s (preview only — gallery.html and used.md untouched)\n" % out
+    )
+    if want_json:
+        print(json.dumps({"ok": True, "preview_only": True, "preview": str(out),
+                          "slug": theme.get("slug"), "size_bytes": out.stat().st_size}))
+    return 0
+
+
 def main(argv):
     want_json = "--json" in argv
     paths = tf_paths.resolve(create=True)
     run = load_json(paths.run_json, {}) or {}
+
+    # --preview-only <theme-dir>: single-theme preview refresh, no side effects.
+    if "--preview-only" in argv:
+        i = argv.index("--preview-only")
+        if i + 1 >= len(argv):
+            msg = "--preview-only requires a theme directory"
+            if want_json:
+                print(json.dumps({"ok": False, "error": msg}))
+            sys.stderr.write("tf_gallery: %s\n" % msg)
+            return 2
+        return _preview_only(paths, run, argv[i + 1], want_json)
+
     # ── Gate A: refuse to assemble if distinctiveness gate is dirty ──────────
     _distinct_script = Path(__file__).parent / "tf_distinct.py"
     if _distinct_script.is_file():
@@ -1841,23 +1957,11 @@ def main(argv):
             }))
             return 1
 
-    tdir = paths.templates
-    if not tdir:
+    chrome = _load_chrome(paths)
+    if chrome is None:
         print(json.dumps({"ok": False, "error": "cannot locate plugin templates"}))
         return 1
-
-    shell = read(tdir / "gallery.shell.html")
-    css = read(tdir / "gallery.css")
-    # a11y-reset.css: the one CSS file every bespoke theme shares (confirmed
-    # carve-out — pure accessibility/behavior, zero visual identity). Appended
-    # after gallery.css so its rules aren't accidentally overridden by
-    # shared-component specificity.
-    a11y_reset = read(tdir / "a11y-reset.css")
-    if a11y_reset:
-        css = css + "\n" + a11y_reset
-    else:
-        sys.stderr.write("tf_gallery: WARNING — templates/a11y-reset.css not found\n")
-    frames = read(tdir / "device-frames.html")
+    shell, css, frames = chrome
 
     # NOTE: preview.partials.html, preview.surfaces.html, templates/sections/
     # hero-*.html, and the surfaces.content.json {{SC_*}} substitution

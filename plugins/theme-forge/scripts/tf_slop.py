@@ -1800,6 +1800,43 @@ def _stdlib_check(preview: Path, categorical_only: bool = False) -> list[dict]:
     return findings
 
 
+def _stale_sources(theme_dir: Path, preview: Path) -> list[str]:
+    """Source files newer than the preview.html derived from them.
+
+    This gate lints the ASSEMBLED preview, not surfaces/ — correctly, since
+    impeccable needs one self-contained document with tokens resolved and
+    @scope applied. The cost is that a preview is a derived artifact which can
+    silently fall behind its sources: edit surfaces/webapp.css, re-run this
+    gate, and you get a verdict on the PREVIOUS version of the file, reported
+    as success. That is worse than an error, because it reads like a pass.
+
+    Detect it by mtime and say so loudly. Refresh with:
+        python3 tf_gallery.py --preview-only <theme-dir>
+    which rewrites only this theme's preview — it does not touch gallery.html
+    or used.md, so it is safe to run while other themes are being fixed.
+    """
+    try:
+        cutoff = preview.stat().st_mtime
+    except OSError:
+        return []
+    newer = []
+    for src in sorted((theme_dir / "surfaces").glob("*")):
+        if src.suffix not in (".html", ".css"):
+            continue
+        try:
+            if src.stat().st_mtime > cutoff:
+                newer.append("surfaces/" + src.name)
+        except OSError:
+            continue
+    tj = theme_dir / "theme.json"
+    try:
+        if tj.is_file() and tj.stat().st_mtime > cutoff:
+            newer.append("theme.json")
+    except OSError:
+        pass
+    return newer
+
+
 def run_theme(theme_dir: Path, available: bool) -> dict:
     """Run impeccable on one theme and write slop.json.  Returns a summary."""
     preview = theme_dir / "preview.html"
@@ -1807,10 +1844,23 @@ def run_theme(theme_dir: Path, available: bool) -> dict:
         _eprint(f"  ⚠  no preview.html in {theme_dir.name} — skipped")
         return {"theme": theme_dir.name, "skipped": True, "reason": "no preview.html"}
 
+    stale = _stale_sources(theme_dir, preview)
+    if stale:
+        _eprint(
+            f"  ⚠  STALE PREVIEW — {theme_dir.name}/preview.html is older than "
+            f"{', '.join(stale)}.\n"
+            f"     Findings below describe the PREVIOUS version of those files, not "
+            f"what is on disk now.\n"
+            f"     Refresh first:  python3 tf_gallery.py --preview-only "
+            f"themes/{theme_dir.name}"
+        )
+
     result: dict = {
         "theme": theme_dir.name,
         "available": available,
         "preview": str(preview),
+        "preview_stale": bool(stale),
+        "stale_sources": stale,
     }
 
     if not available:
@@ -1975,6 +2025,13 @@ def main() -> None:
         "total_hard_stops": total_hard_stops,
         "hard_stop_rules": hard_stop_rules,
         "themes_with_hard_stops": themes_with_hard_stops,
+        # Any theme listed here was linted against a preview.html older than its
+        # own surfaces/ — its verdict describes code that is no longer on disk.
+        # Callers should refresh (tf_gallery.py --preview-only) and re-run
+        # rather than trusting or acting on those findings.
+        "themes_with_stale_preview": sorted(
+            r["theme"] for r in results if r.get("preview_stale")
+        ),
         "results": results,
     }
 
