@@ -112,7 +112,7 @@ The design critic runs after all gates pass. Its screenshots land in `screenshot
 **Via the GitHub marketplace source (recommended):**
 
 ```
-/plugin marketplace add github:Theme-Forger/theme-forge
+/plugin marketplace add github:Theme-Forger/Theme-Forge
 /plugin install theme-forge@theme-forge
 ```
 
@@ -121,7 +121,7 @@ Or add the marketplace to your `~/.claude/settings.json` permanently:
 ```json
 {
   "extraKnownMarketplaces": [
-    { "source": "github", "repo": "Theme-Forger/theme-forge" }
+    { "source": "github", "repo": "Theme-Forger/Theme-Forge" }
   ]
 }
 ```
@@ -129,7 +129,7 @@ Or add the marketplace to your `~/.claude/settings.json` permanently:
 **Without a marketplace install (try it from a clone):**
 
 ```bash
-git clone https://github.com/Theme-Forger/theme-forge.git
+git clone https://github.com/Theme-Forger/Theme-Forge.git
 cd theme-forge
 sh bootstrap.sh          # wires commit hooks — run once after cloning
 claude --plugin-dir plugins/theme-forge

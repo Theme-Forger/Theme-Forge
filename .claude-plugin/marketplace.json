@@ -1,10 +1,10 @@
 {
   "name": "theme-forge",
   "owner": { "name": "Theme Forge" },
-  "homepage": "https://github.com/Theme-Forger/theme-forge",
+  "homepage": "https://github.com/Theme-Forger/Theme-Forge",
   "repository": {
     "type": "git",
-    "url": "https://github.com/Theme-Forger/theme-forge.git"
+    "url": "https://github.com/Theme-Forger/Theme-Forge.git"
   },
   "plugins": [
     {

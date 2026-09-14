@@ -6,14 +6,14 @@
   "keywords": ["design", "themes", "ui", "ux", "design-system", "branding", "react-native", "expo"],
   "author": { "name": "Theme Forge" },
   "license": "MIT",
-  "homepage": "https://github.com/Theme-Forger/theme-forge",
+  "homepage": "https://github.com/Theme-Forger/Theme-Forge",
   "repository": {
     "type": "git",
-    "url": "https://github.com/Theme-Forger/theme-forge.git",
+    "url": "https://github.com/Theme-Forger/Theme-Forge.git",
     "directory": "plugins/theme-forge"
   },
   "bugs": {
-    "url": "https://github.com/Theme-Forger/theme-forge/issues"
+    "url": "https://github.com/Theme-Forger/Theme-Forge/issues"
   },
   "hooks": "./hooks/hooks.json"
 }
