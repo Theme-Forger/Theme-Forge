@@ -17,6 +17,7 @@ Python 3.9+, standard library only. Exit 0/1/2.
 from __future__ import annotations
 
 import json
+import re
 import shutil
 import subprocess
 import sys
@@ -39,11 +40,33 @@ def _static_config(id_prefix: str) -> dict:
 
     The cost is a few hundred bytes on assets that carry metadata at all;
     authored SVGs have none, so for them this override changes nothing.
+
+    The four accessibility overrides below exist because svgo cannot see that an
+    ARIA attribute consumes an id, and treats an accessible name as dead weight.
+    Left at preset-default, a real run stripped `<title>` from 157 icons across
+    three themes and left 13 `aria-labelledby` attributes pointing at ids that no
+    longer existed -- every one of those files still parsed, still rendered, and
+    still passed tf_svgcheck. An SVG carrying `role="img"` with no reachable name
+    is worse than one with no role at all, so this is a correctness fix, not a
+    size/quality tradeoff:
+
+      removeTitle              `<title>` IS the accessible name.
+      removeDesc               `<desc>` is the long description ARIA points at.
+      cleanupIds               drops ids it thinks are unreferenced; it does not
+                               parse aria-labelledby/aria-describedby, so an
+                               ARIA-only id looks unused to it.
+      removeUnknownsAndDefaults strips `role="img"` off the root element.
     """
     return {
         "plugins": [
             {"name": "preset-default",
-             "params": {"overrides": {"removeMetadata": False}}},
+             "params": {"overrides": {
+                 "removeMetadata": False,
+                 "removeTitle": False,
+                 "removeDesc": False,
+                 "cleanupIds": False,
+                 "removeUnknownsAndDefaults": False,
+             }}},
             {"name": "prefixIds", "params": {"prefix": id_prefix}},
         ]
     }
@@ -54,7 +77,17 @@ def _animated_config(id_prefix: str) -> dict:
 
     prefixIds still runs: with cleanupIds off, authored IDs survive verbatim, so
     prefixIds is what keeps them from colliding if the asset is ever inlined
-    alongside another theme's. It rewrites references along with the IDs.
+    alongside another theme's. It rewrites href/url() references along with the
+    IDs -- but NOT ARIA ones, which is why optimize() runs _repair_aria_refs()
+    afterwards.
+
+    convertShapeToPath is disabled for a specific, silent failure: it rewrites
+    `<rect>` into `<path d="...">`, which makes any
+    `<animate attributeName="height">` targeting that rect a no-op. The mark
+    never draws, the file is still valid SVG, and nothing warns. This cost two
+    separate themes their logo animation on a real run -- one of them twice,
+    because the first workaround (a transform-scale rewrite) was then broken by
+    collapseGroups hoisting the wrapper transform onto the animated element.
     """
     return {
         "plugins": [
@@ -69,6 +102,11 @@ def _animated_config(id_prefix: str) -> dict:
                         "mergePaths": False,
                         "collapseGroups": False,
                         "removeUnknownsAndDefaults": False,
+                        # Animated geometry: see docstring.
+                        "convertShapeToPath": False,
+                        # Accessible name/description -- see _static_config.
+                        "removeTitle": False,
+                        "removeDesc": False,
                         # See _static_config: <metadata> carries a sourced
                         # asset's license, and losing it is silent.
                         "removeMetadata": False,
@@ -78,6 +116,50 @@ def _animated_config(id_prefix: str) -> dict:
             {"name": "prefixIds", "params": {"prefix": id_prefix}},
         ]
     }
+
+
+_ARIA_IDREF_ATTRS = ("aria-labelledby", "aria-describedby")
+
+
+def _repair_aria_refs(path: Path) -> int:
+    """Repoint ARIA id references that prefixIds renamed out from under them.
+
+    svgo's prefixIds rewrites `href="#x"` and `url(#x)` when it renames an id,
+    but it does not know that `aria-labelledby="x"` is also a reference. The
+    result is an SVG whose accessible name silently stops resolving: the
+    `<title>` is still there, still has an id, and nothing points at it.
+
+    Returns the number of attributes repaired.
+    """
+    try:
+        text = path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        return 0
+
+    ids = set(re.findall(r'\bid="([^"]+)"', text))
+    if not ids:
+        return 0
+
+    repaired = 0
+    for attr in _ARIA_IDREF_ATTRS:
+        for raw in set(re.findall(r'\b%s="([^"]+)"' % attr, text)):
+            refs = raw.split()
+            fixed = []
+            for ref in refs:
+                if ref in ids:
+                    fixed.append(ref)
+                    continue
+                # prefixIds emits "<prefix>__<original>"; recover by suffix.
+                hits = sorted(i for i in ids if i.endswith("__" + ref))
+                fixed.append(hits[0] if hits else ref)
+            if fixed != refs:
+                text = text.replace('%s="%s"' % (attr, raw),
+                                    '%s="%s"' % (attr, " ".join(fixed)))
+                repaired += 1
+
+    if repaired:
+        path.write_text(text, encoding="utf-8")
+    return repaired
 
 
 def _sanitize_prefix(text: str) -> str:
@@ -210,6 +292,16 @@ def optimize(in_path: Path, out_path: Path, animated: bool = False,
                 "error": "svgo exited %d: %s" % (r.returncode, err[:200]),
             }
 
+        # prefixIds renames ids but does not rewrite aria-labelledby /
+        # aria-describedby, so the accessible name stops resolving silently.
+        # Repair before measuring, so size_after reflects what ships.
+        aria_repaired = _repair_aria_refs(out_path)
+        if aria_repaired:
+            sys.stderr.write(
+                "tf_optimize: repointed %d ARIA id reference(s) in %s\n"
+                % (aria_repaired, out_path.name)
+            )
+
         size_after = out_path.stat().st_size if out_path.is_file() else size_before
         savings = round(100.0 * (1 - size_after / size_before), 1) if size_before else 0
 
@@ -224,6 +316,7 @@ def optimize(in_path: Path, out_path: Path, animated: bool = False,
             "size_after": size_after,
             "savings_pct": savings,
             "id_prefix": prefix,
+            "aria_refs_repaired": aria_repaired,
         }
     except FileNotFoundError:
         if str(in_path) != str(out_path):

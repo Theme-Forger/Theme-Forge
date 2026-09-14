@@ -1695,6 +1695,46 @@ def build(shell, css, frames, themes, meta, primary_platform,
     return out
 
 
+def _knowledge_label(paths, run: dict) -> str:
+    """Header text for the Knowledge meta pair.
+
+    Three states that must not be collapsed into one word:
+
+      "2026-09-09"      knowledge was refreshed from the live web, on that date
+      "seed (never refreshed)"
+                        the knowledge base is the hand-authored baseline shipped
+                        with the plugin -- a real, reportable condition
+      "not recorded"    we cannot tell, because neither FRESHNESS.json nor
+                        run.json was readable
+
+    This previously read `run.get("knowledge_refreshed") or "seed"`, which
+    reported a *missing run.json* as *unrefreshed knowledge*. Those are
+    different facts and the wrong one is actively misleading: on a run whose
+    knowledge had been refreshed two days earlier, the header said "seed".
+
+    FRESHNESS.json is the authority here, not run.json -- tf_freshness.py owns
+    it and updates it at refresh time, whereas run.json only carries a copy and
+    is written at the end of a run. Preferring the authority also means the
+    label is correct even when the gallery is rebuilt standalone.
+    """
+    fresh = load_json(getattr(paths, "freshness_json", None), {}) or {}
+    domains = fresh.get("domains") or {}
+    if domains:
+        if all((d or {}).get("status") == "seed" for d in domains.values()):
+            return "seed (never refreshed)"
+        stamps = [
+            (d or {}).get("refreshed", "")
+            for d in domains.values()
+            if (d or {}).get("refreshed")
+        ]
+        newest = fresh.get("last_full_refresh") or (max(stamps) if stamps else "")
+        if newest:
+            return newest[:10]
+
+    stamped = (run.get("knowledge_refreshed") or "")[:10]
+    return stamped or "not recorded"
+
+
 def main(argv):
     want_json = "--json" in argv
     paths = tf_paths.resolve(create=True)
@@ -1863,8 +1903,13 @@ def main(argv):
         # a data gap to show plainly ("Your project"), not one to paper
         # over with a differently-shaped field.
         "project": brief.get("name") or "Your project",
-        "gen": (run.get("generated_at") or "")[:10] or "—",
-        "refresh": (run.get("knowledge_refreshed") or "")[:10] or "seed",
+        # "not recorded" != "—". run.json is written at the END of a run, so a
+        # gallery assembled before it exists (or after a crash) has no date to
+        # show. Saying so plainly beats an em dash that reads like a rendering
+        # bug, and beats inventing datetime.now(), which would assert a
+        # generation time this function did not observe.
+        "gen": (run.get("generated_at") or "")[:10] or "not recorded",
+        "refresh": _knowledge_label(paths, run),
     }
 
     # gallery
