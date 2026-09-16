@@ -195,7 +195,30 @@ def main(argv: list[str]) -> int:
             run = json.loads(paths.run_json.read_text(encoding="utf-8"))
         except (json.JSONDecodeError, OSError):
             run = {}
-    run_date = (run.get("generated_at") or "")[:10]
+    # Resolve the run-date from the most STABLE source available, not the most
+    # recent one. Rows are keyed on (slug, run-date), and tf_gallery.py calls
+    # this script on every successful assembly — so if the date can move
+    # mid-run, the same six themes get appended again instead of deduped.
+    #
+    # logs/run-id.json is stamped once by tf_reset.py at wipe time and cannot
+    # change while the run is in progress, so it is preferred over run.json's
+    # generated_at, which is only written at the END of a run. Taking
+    # generated_at first is exactly what caused a real double-record: the first
+    # assembly fell through to date.today(), a later one read generated_at, the
+    # run had crossed midnight, and used.md ended up with 24 rows for 2 runs —
+    # halving the 20-distinct-date decay window and leaving a stale row (empty
+    # layout_family_mobile, recorded before the mobile surfaces existed) beside
+    # a complete one for each theme.
+    run_date = ""
+    run_stamp = Path(paths.home) / "logs" / "run-id.json"
+    if run_stamp.is_file():
+        try:
+            run_date = (json.loads(run_stamp.read_text(encoding="utf-8"))
+                        .get("run_date") or "")[:10]
+        except (json.JSONDecodeError, OSError):
+            run_date = ""
+    if not run_date:
+        run_date = (run.get("generated_at") or "")[:10]
     if not run_date:
         import datetime
         run_date = datetime.date.today().isoformat()

@@ -12,6 +12,7 @@ Point it anywhere else and it refuses.
 """
 from __future__ import annotations
 
+import datetime
 import json
 import shutil
 import sys
@@ -69,6 +70,34 @@ def reset(target: Path, home: Path) -> None:
     http_log = home / "logs" / "http.log"
     if http_log.is_file():
         http_log.write_text("", encoding="utf-8")
+
+    # Stamp the run with a date that cannot change while it is in progress.
+    #
+    # tf_ledger.py keys used.md rows on (slug, run-date) and used to take that
+    # date from run.json's generated_at, falling back to date.today() when
+    # run.json did not exist yet. run.json is written at the END of a run, but
+    # tf_gallery.py calls tf_ledger.py on EVERY successful assembly -- so the
+    # first assembly keyed on today() and a later one keyed on generated_at.
+    # When those differ the same six themes are appended twice instead of
+    # deduped, which really happened twice in one session: a long run crossed
+    # midnight and produced 24 rows for 2 runs. Worse than the noise, the decay
+    # window keeps the 20 most-recent DISTINCT run-dates, so every run burned
+    # two slots and the window held ~10 runs instead of 20. And the rows were
+    # not even equivalent -- the early ones predated the mobile surfaces, so
+    # their layout_family_mobile column was empty while the later ones were
+    # complete, leaving a stale row beside a good one for each theme.
+    #
+    # Writing the date once, here, at the single point every run passes through
+    # before anything can be recorded, makes repeated assemblies genuinely
+    # idempotent. It lives in logs/ rather than current/ because
+    # tf_verify_wipe.py treats ANY file under current/ as a failed wipe.
+    run_stamp = home / "logs" / "run-id.json"
+    now = datetime.datetime.now(datetime.timezone.utc)
+    run_stamp.parent.mkdir(parents=True, exist_ok=True)
+    run_stamp.write_text(json.dumps({
+        "run_started": now.strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "run_date": now.strftime("%Y-%m-%d"),
+    }, indent=2), encoding="utf-8")
 
 
 def main(argv):
