@@ -104,6 +104,16 @@ def _animated_config(id_prefix: str) -> dict:
                         "removeUnknownsAndDefaults": False,
                         # Animated geometry: see docstring.
                         "convertShapeToPath": False,
+                        # A fill-arrival animation starts from `fill="<hex>"
+                        # fill-opacity="0"` and animates the opacity up.
+                        # removeUselessStrokeAndFill reads opacity 0 as "this
+                        # fill does nothing" and rewrites it to `fill="none"`,
+                        # so the element can never become visible. Observed
+                        # shipping two marks broken in one run: a success check
+                        # that rendered as an empty outline and an error mark
+                        # that lost its plate entirely. Both files still parsed
+                        # and still passed tf_svgcheck.
+                        "removeUselessStrokeAndFill": False,
                         # Accessible name/description -- see _static_config.
                         "removeTitle": False,
                         "removeDesc": False,
