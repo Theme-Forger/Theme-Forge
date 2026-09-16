@@ -896,6 +896,32 @@ def _stdlib_check(preview: Path, categorical_only: bool = False) -> list[dict]:
     # spans cannot desynchronise reported locations.
     html = _strip_comments(html)
 
+    # Strip the gallery's own per-theme detail drawers before linting.
+    #
+    # tf_gallery.py renders each theme's PREVIOUS slop.json findings into a
+    # `<section class="drawer-theme" style="display:none">` as advisory chips.
+    # Those chips quote rule messages verbatim, so a rule that matches a bare
+    # substring anywhere in the document can read its own prior complaint and
+    # fall silent.
+    #
+    # Confirmed live on rule 32: a theme with ZERO `:disabled` in all three of
+    # its surface CSS files stopped reporting `button-state-missing`, because
+    # the drawer chip for that very finding contains the literal string
+    # ":disabled CSS selector". The gate suppressed itself, and the real MEDIUM
+    # became invisible on rebuild — a false PASS, which is worse than a false
+    # finding.
+    #
+    # Drawers are `display:none` chrome, not theme content, so they should
+    # never have been in scope. Stripping them also removes the chrome
+    # contamination a design-critic pass separately traced for
+    # `eyebrow-density` (drawer <h4> labels inflating the section denominator)
+    # and `em-dash-in-copy` (em-dashes in drawer prose attributed to the
+    # theme). Same lesson as _strip_comments above, one level out: do not lint
+    # the tool's own output as if the theme had written it.
+    html = re.sub(
+        r'<section class="drawer-theme".*?</section>', ' ', html, flags=re.S
+    )
+
     findings: list[dict] = []
 
     if not categorical_only:
