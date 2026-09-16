@@ -275,6 +275,65 @@ _HOVER_MEDIA_RE = re.compile(
     r'@media\s*\([^)]*hover\s*:\s*hover[^)]*\)',
     re.IGNORECASE,
 )
+_HOVER_GATE_HEAD_RE = re.compile(
+    r'@media[^{]*hover\s*:\s*hover', re.IGNORECASE
+)
+
+
+def count_ungated_hovers(css_or_html: str) -> tuple[int, int]:
+    """Return (total_hover_selectors, ungated_hover_selectors).
+
+    Rule 7 used to be `_BARE_HOVER_RE.search(...) and not
+    _HOVER_MEDIA_RE.search(...)` — a DOCUMENT-LEVEL boolean. That made the
+    HIGH finding satisfiable by the presence of a single hover media query
+    anywhere in the file, no matter how many :hover rules sat outside it.
+
+    Measured consequence on a real six-theme run: 77 of 173 :hover selectors
+    were ungated, and the gate reported zero hover findings for every theme.
+    One theme had 33 ungated hovers and ZERO hover media queries in its own
+    surface CSS — it passed because `brand/motion/motion.css`, which
+    tf_gallery.py inlines into preview.html, happened to contain one unrelated
+    gated block. On a touch-primary product that is exactly the defect the
+    rule exists to catch: a false hover fires on tap and sticks after the
+    finger lifts.
+
+    So count per selector instead, tracking brace depth so a :hover inside a
+    hover-gated @media is credited and one outside it is not. Depth tracking
+    also handles the @scope wrapper tf_gallery.py adds around surface CSS and
+    any nested @container/@supports blocks.
+    """
+    # Strip CSS comments FIRST. A comment sitting between the previous rule and
+    # an at-rule prelude ends up inside the accumulated block head, so
+    # `head.lstrip().startswith('@')` is false and the @media is misread as a
+    # selector — the gate never registers and every :hover inside it counts as
+    # ungated. Every theme in a real run had exactly that shape
+    # ("/* ...cannot fire a false hover state. */ @media (hover: hover) ... {"),
+    # which turned a correct 2-ungated into a false 24-ungated.
+    css = re.sub(r'/\*.*?\*/', ' ', css_or_html, flags=re.S)
+
+    total = ungated = 0
+    gate_stack: list[bool] = []
+    head: list[str] = []
+    for ch in css:
+        if ch == '{':
+            h = ''.join(head)
+            if h.lstrip().startswith('@'):
+                gate_stack.append(bool(_HOVER_GATE_HEAD_RE.search(h)))
+            else:
+                n = h.lower().count(':hover')
+                if n:
+                    total += n
+                    if not any(gate_stack):
+                        ungated += n
+                gate_stack.append(False)
+            head = []
+        elif ch == '}':
+            if gate_stack:
+                gate_stack.pop()
+            head = []
+        else:
+            head.append(ch)
+    return total, ungated
 # Rule 8: ease-in on transition/animation property — applies to UI (HIGH)
 _EASE_IN_PROP_RE = re.compile(
     r'(?:transition|animation)\s*:[^;]*\bease-in\b(?!\s*-out)',
@@ -489,7 +548,7 @@ def _print_motion_gate_table(theme_name: str, findings: list[dict],
         _eprint(f"    {rule:<28s} {sev:<6s} {status}   {label} = {n} ({want})")
 
 
-def _stdlib_rules_1_13(html: str) -> list[dict]:
+def _stdlib_rules_1_13(html: str, theme_dir: Path | None = None) -> list[dict]:
     """Run Rules 1-13 (motion / visual / copy) on an already-read HTML string.
     Returns finding dicts. Called by _stdlib_check when categorical_only=False."""
     findings: list[dict] = []
@@ -624,19 +683,44 @@ def _stdlib_rules_1_13(html: str) -> list[dict]:
         })
 
     # --- Rule 7: ungated-hover (severity: high) --------------------------------
-    # :hover motion without @media (hover: hover) fires false hovers on touch devices.
-    # Flag if bare :hover rules exist AND no hover media query is present.
-    if _BARE_HOVER_RE.search(html) and not _HOVER_MEDIA_RE.search(html):
+    # :hover motion without @media (hover: hover) fires false hovers on touch
+    # devices. Counted PER SELECTOR, not as a document-level boolean — see
+    # count_ungated_hovers() for why the boolean form let 77 of 173 ungated
+    # hovers through on a real run while reporting zero findings.
+    #
+    # Read from the theme's OWN surfaces/*.css rather than from preview.html.
+    # preview.html also carries shared gallery chrome (the rail, tabs, icon
+    # buttons) and every theme's brand/motion/motion.css, which have their own
+    # :hover rules — counting those would attribute another author's CSS to
+    # this theme and make the number unactionable. Same reasoning as rule 14
+    # reading theme.json from the preview's own directory.
+    _surfaces_dir = (theme_dir / "surfaces") if theme_dir else None
+    _hover_total = _hover_ungated = 0
+    if _surfaces_dir is not None and _surfaces_dir.is_dir():
+        for _css in sorted(_surfaces_dir.glob("*.css")):
+            try:
+                _t, _u = count_ungated_hovers(
+                    _css.read_text(encoding="utf-8", errors="replace"))
+            except OSError:
+                continue
+            _hover_total += _t
+            _hover_ungated += _u
+    if _hover_ungated:
         findings.append({
             "rule": "ungated-hover",
             "severity": "high",
             "category": "motion",
             "source": "stdlib",
             "message": (
-                ":hover styles found without @media (hover: hover) and (pointer: fine) gating — "
-                "touch devices fire false hovers on tap. Wrap all :hover motion in the media query."
+                "%d of %d :hover selector(s) are not inside @media (hover: hover) and "
+                "(pointer: fine) — touch devices fire false hovers on tap and the state "
+                "sticks after the finger lifts. Wrap each one in the media query; "
+                ":active must stay OUTSIDE it, since that is the touch feedback path."
+                % (_hover_ungated, _hover_total)
             ),
-            "element": ":hover {}",
+            "element": "%d ungated :hover" % _hover_ungated,
+            "count": _hover_ungated,
+            "total": _hover_total,
         })
 
     # --- Rule 8: ease-in-on-transition (severity: high) -----------------------
@@ -815,7 +899,7 @@ def _stdlib_check(preview: Path, categorical_only: bool = False) -> list[dict]:
     findings: list[dict] = []
 
     if not categorical_only:
-        findings += _stdlib_rules_1_13(html)
+        findings += _stdlib_rules_1_13(html, theme_dir=preview.parent)
 
     # --- Rule 14: webapp-duration-over-budget (severity: medium) ------------------
     # If the theme declares motion_budget.webapp = "near-imperceptible" but
