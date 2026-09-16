@@ -356,6 +356,50 @@ def detect(root: Path):
     web = detect_web(root, deps, targets, notes)
     native = detect_native(root, deps, targets, notes)
 
+    # In a monorepo the framework deps live in the WORKSPACE PACKAGES, not the
+    # root package.json — so the two calls above see nothing and report
+    # framework "unknown" / native None even though the repo plainly has both.
+    #
+    # Measured on a real Expo + Next.js pnpm monorepo: classify_package() got
+    # the kinds right ("native-app", "web-app", cross_platform true) while
+    # profile.native stayed None, profile.web.framework stayed "unknown",
+    # profile.web.styling stayed "unknown" and targets was []. The shape was
+    # detected; every specific was missed. On that run native was treated as
+    # the primary platform only because a human said so — an unattended run
+    # would have had nothing to go on.
+    #
+    # So descend: re-run each detector against the package that actually
+    # declares the dependencies, and only to FILL A GAP — a root-level result
+    # always wins, since a root-level framework is the more specific signal
+    # about what the repo is.
+    if monorepo:
+        for _p in monorepo.get("packages") or []:
+            _rel = str(_p.get("path") or "").strip()
+            if not _rel:
+                continue
+            _pkg_dir = Path(_rel) if Path(_rel).is_absolute() else (root / _rel)
+            if not _pkg_dir.is_dir():
+                continue
+            _pkg_deps = all_deps(read_json(_pkg_dir / "package.json"))
+            if not _pkg_deps:
+                continue
+            _sub: list = []
+            if _p.get("kind") == "native-app" and not native:
+                native = detect_native(_pkg_dir, _pkg_deps, _sub, notes)
+            elif _p.get("kind") == "web-app" and (
+                    not web or web.get("framework") in (None, "unknown")):
+                _w = detect_web(_pkg_dir, _pkg_deps, _sub, notes)
+                if _w and _w.get("framework") not in (None, "unknown"):
+                    web = _w
+            # Target paths come out relative to whatever root was passed, so
+            # re-anchor them to the repo root or an applier would write to the
+            # wrong directory.
+            _prefix = _rel.replace(os.sep, "/").rstrip("/")
+            for _t in _sub:
+                _t["path"] = "%s/%s" % (
+                    _prefix, str(_t["path"]).replace(os.sep, "/").lstrip("/"))
+                targets.append(_t)
+
     # Normalize path separators and drop duplicates (keep first-seen order).
     seen = set()
     deduped = []
