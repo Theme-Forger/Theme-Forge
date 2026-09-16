@@ -32,11 +32,42 @@ def _read_previous(run_json: Path):
     return None
 
 
+def _empty_in_place(target: Path, home: Path) -> None:
+    """Remove everything INSIDE target, leaving the directory node itself.
+
+    On Windows a process holding `target` as its current working directory
+    keeps a handle on the directory node, so `shutil.rmtree(target)` fails with
+    WinError 32 on the final rmdir even when every file inside is perfectly
+    deletable. Observed on a real run: rmtree refused on `current` itself while
+    a rename-based probe of all ~1400 files inside found zero that were
+    delete-blocked, and the holder was neither the orchestrator's shell nor the
+    Playwright MCP browser.
+
+    The wipe's contract is "current/ contains no trace of the previous run",
+    not "the directory inode was recreated" — tf_verify_wipe.py checks the
+    former. So empty it in place and let the caller re-scaffold. Children are
+    removed depth-first; each one is still asserted under TF_HOME.
+    """
+    for child in sorted(target.iterdir(), key=lambda p: len(p.parts), reverse=True):
+        tf_paths.assert_under_home(child, home)
+        if child.is_dir() and not child.is_symlink():
+            shutil.rmtree(child)
+        else:
+            child.unlink()
+
+
 def reset(target: Path, home: Path) -> None:
     # Never remove anything that isn't provably under TF_HOME.
     tf_paths.assert_under_home(target, home)
     if target.exists():
-        shutil.rmtree(target)
+        try:
+            shutil.rmtree(target)
+        except OSError:
+            # Directory node itself is locked (see _empty_in_place). Falling
+            # back is strictly better than aborting the run: the alternative is
+            # a session that cannot start until the user finds and closes an
+            # unidentified process.
+            _empty_in_place(target, home)
     target.mkdir(parents=True, exist_ok=True)
     (target / "themes").mkdir(parents=True, exist_ok=True)
     (target / "backups").mkdir(parents=True, exist_ok=True)
