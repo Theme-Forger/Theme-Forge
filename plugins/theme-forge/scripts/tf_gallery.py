@@ -356,13 +356,51 @@ def theme_style_block(idx, theme, theme_dir):
     # var(--tf-space-N) with no literal fallback silently collapsed to 0/
     # "normal" until this block existed at all -- confirmed by a design-critic
     # pass catching a theme's nav items rendering with zero gap.
+    #
+    # AUTHORITY: the theme's own web/theme.css, when it declares --tf-space-*.
+    #
+    # Synthesising N * unit for every theme assumes one global naming
+    # convention, and themes do not share one. Both are legitimate and both
+    # appear in this pipeline's own output:
+    #   * px-keyed  -- tokens.json {"20": 20}, "20 is one panel overlap"
+    #   * positional -- tokens.json {"4": 12}, "the index is positional, not a
+    #                   multiplier"
+    # On a real six-theme run the synthesis rendered a px-keyed theme at 4x its
+    # own scale in the gallery while its shipped web/theme.css was correct:
+    # --tf-space-20 resolved to 80px against a declared 20px, a primary CTA
+    # came out 312x240 with padding 64px 128px 64px 96px, and the document ran
+    # 19,458px against 5-6k for its siblings. Every gate passed it, because
+    # gates read source and this only existed in the assembled artefact.
+    #
+    # web/theme.css is what apply-theme and export-theme actually ship, so
+    # matching it is what makes the preview a preview rather than a separate
+    # rendering with its own spacing. Fall back to the synthesis below only
+    # when a theme declares nothing.
+    _emitted_space: set[str] = set()
+    _theme_css = theme_dir / "web" / "theme.css"
+    if _theme_css.is_file():
+        try:
+            for _m in re.finditer(
+                r'(--tf-space-[\w-]+)\s*:\s*([^;]+);',
+                _theme_css.read_text(encoding="utf-8"),
+            ):
+                _name = _m.group(1)
+                if _name not in _emitted_space:
+                    _emitted_space.add(_name)
+                    lines.append("  %s: %s;" % (_name, _m.group(2).strip()))
+        except OSError:
+            pass
+
     space = theme.get("space", {})
     unit = space.get("unit")
     scale = space.get("scale")
     if isinstance(unit, (int, float)) and isinstance(scale, list):
         for n in scale:
             if isinstance(n, (int, float)):
-                lines.append("  --tf-space-%s: %spx;" % (int(n), n * unit))
+                _name = "--tf-space-%s" % int(n)
+                if _name not in _emitted_space:
+                    _emitted_space.add(_name)
+                    lines.append("  %s: %spx;" % (_name, n * unit))
     # Dense Tailwind-style index range (--tf-space-1 through --tf-space-32,
     # meaning N * space.unit) IN ADDITION to the theme's own sparse declared
     # scale above. theme.json's scale array is a curated, irregular set of
@@ -377,7 +415,10 @@ def theme_style_block(idx, theme, theme_dir):
     # number either way.
     if isinstance(unit, (int, float)):
         for n in range(0, 33):
-            lines.append("  --tf-space-%d: %spx;" % (n, n * unit))
+            _name = "--tf-space-%d" % n
+            if _name not in _emitted_space:
+                _emitted_space.add(_name)
+                lines.append("  %s: %spx;" % (_name, n * unit))
     # fonts (always full fallback stacks)
     for role in ("display", "body", "mono"):
         r = typ.get(role, {})
