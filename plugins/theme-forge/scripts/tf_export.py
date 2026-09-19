@@ -193,13 +193,29 @@ def main(argv):
     build_zip(theme_dir, slug, name, target)
 
     # Record the export in run.json.
-    if run is not None:
-        run.setdefault("exported", []).append(
-            {"slug": slug, "zip": str(target), "at": _now_iso()})
-        try:
-            paths.run_json.write_text(json.dumps(run, indent=2) + "\n", encoding="utf-8")
-        except Exception:
-            pass
+    #
+    # This used to be gated on `if run is not None`, i.e. on run.json ALREADY
+    # existing -- but tf_export.py is the only thing in the pipeline that ever
+    # writes that file, so it could never come into existence and the `exported`
+    # array was never populated. Confirmed live: four themes exported cleanly
+    # and run.json was still absent afterwards, so tf_reset.py's
+    # "unexported previous set" warning -- the one thing this record exists to
+    # suppress -- would still have fired on the next generate run despite the
+    # export having happened.
+    #
+    # When there is no prior record, start a minimal one rather than skipping.
+    # Deliberately no invented generate-time fields: a run.json created here
+    # knows only what the export knows, so tf_gallery.py's GENERATED header
+    # still reads "not recorded", which is the honest answer.
+    if run is None:
+        run = {"created_by": "tf_export", "note":
+               "No generate-time run.json existed; created to record exports."}
+    run.setdefault("exported", []).append(
+        {"slug": slug, "zip": str(target), "at": _now_iso()})
+    try:
+        paths.run_json.write_text(json.dumps(run, indent=2) + "\n", encoding="utf-8")
+    except Exception:
+        pass
 
     result = {"ok": True, "slug": slug, "zip": str(target),
               "size_bytes": target.stat().st_size, "theme_dir": str(theme_dir)}
