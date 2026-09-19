@@ -1418,8 +1418,30 @@ def _stdlib_check(preview: Path, categorical_only: bool = False) -> list[dict]:
         if _emdash_re.search(_mm.group(2)):
             _emdash_hit = _mm.group(2)[:80].strip()
             break
+    # A <p> that is never closed makes this non-greedy DOTALL match run on to the
+    # NEXT </p> far downstream, swallowing whatever sits between -- nav labels,
+    # table cells, shared gallery chrome, SVG <desc> prose. Any such span is not
+    # a paragraph of copy, so an em-dash inside it is not an em-dash in copy.
+    #
+    # Measured on a real six-theme run: five of six themes reported this rule
+    # with elements like "Counter / Paninda / Mensahe7 / Tindahan" (a mobile nav
+    # strip) and "64pxSari mark: a stencil-cut karatula cross..." (a brand-asset
+    # table plus an SVG description). One theme had five genuine em-dashes in its
+    # own website copy, which this rule correctly caught -- and after those were
+    # fixed it kept firing on the swallowed-span path, so the real finding and
+    # the false one were indistinguishable in the report.
+    #
+    # A legitimate paragraph contains only inline markup, so rejecting any match
+    # whose body contains a block-level tag drops the runaway spans without
+    # suppressing a real finding.
+    _P_BLOCK_TAG_RE = re.compile(
+        r'<(?:p|div|section|article|aside|nav|header|footer|main|ul|ol|li|table|'
+        r'thead|tbody|tr|td|th|svg|desc|h[1-6])\b', re.IGNORECASE,
+    )
     if _emdash_hit is None:
         for _mm in re.finditer(r'<p[^>]*>(.*?)</p>', html, re.IGNORECASE | re.DOTALL):
+            if _P_BLOCK_TAG_RE.search(_mm.group(1)):
+                continue  # unclosed <p>: this span is not one paragraph
             if _emdash_re.search(_mm.group(1)):
                 _emdash_hit = re.sub(r'<[^>]+>', '', _mm.group(1))[:80].strip()
                 break
