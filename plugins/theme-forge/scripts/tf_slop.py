@@ -1010,7 +1010,15 @@ def _stdlib_check(preview: Path, categorical_only: bool = False) -> list[dict]:
     _STATE_SUFFIX_RE = re.compile(
         r'\.is-[\w-]+|\.[\w-]*-open\b|\.[\w-]*-active\b|\.[\w-]*-visible\b|'
         r'\.[\w-]*-revealed\b|\.[\w-]*-shown\b|\.[\w-]*-expanded\b|'
-        r'\[open\]|:popover-open|:checked|:hover|:focus(?:-visible|-within)?|'
+        # Ordinary BEM state modifiers for "this one is the chosen one". The
+        # vocabulary above covered show/hide words but not selection words, so
+        # a nav rail whose inactive tabs sit flush and whose SELECTED tab shows
+        # its offset plate via `.kt-tab--on .kt-tab__block { opacity: 1 }` was
+        # reported as hiding content at rest -- the resolving companion existed
+        # and was simply spelled with a word the regex did not know.
+        r'\.[\w-]*-on\b|\.[\w-]*-selected\b|\.[\w-]*-current\b|\.[\w-]*-checked\b|'
+        r'\[open\]|:popover-open|:checked|:hover|:active|:disabled|'
+        r':focus(?:-visible|-within)?|'
         r'data-state\s*=\s*["\'](?:open|visible)["\']',
         re.IGNORECASE,
     )
@@ -1066,6 +1074,23 @@ def _stdlib_check(preview: Path, categorical_only: bool = False) -> list[dict]:
             html, re.IGNORECASE,
         ) is not None
 
+    # An interaction-state pseudo-class ANYWHERE in the selector means the block
+    # describes a state, not the element's resting appearance. :focus-visible and
+    # :focus-within are both caught by the :focus alternative.
+    _R15_STATE_SUBJECT_RE = re.compile(
+        r':(?:active|hover|disabled|focus|checked|target)\b', re.IGNORECASE,
+    )
+
+    # Every class declared pointer-events:none anywhere in the file. An element
+    # marked inert once is inert; which block said so is immaterial.
+    _r15_inert_classes: set[str] = set()
+    for _im in _CSS_BLOCK_RE.finditer(_html_no_kf_no_ss):
+        if re.search(r'pointer-events\s*:\s*none', _im.group(2), re.IGNORECASE):
+            _r15_inert_classes.update(re.findall(r'\.([\w-]+)', _im.group(1)))
+
+    def _r15_inert_elsewhere(sel: str) -> bool:
+        return any(c in _r15_inert_classes for c in re.findall(r'\.([\w-]+)', sel))
+
     _r15_unprotected: list[str] = []
     for _r15m in _CSS_BLOCK_RE.finditer(_html_no_kf_no_ss):
         _r15_sel, _r15_body = _r15m.group(1).strip(), _r15m.group(2)
@@ -1086,6 +1111,31 @@ def _stdlib_check(preview: Path, categorical_only: bool = False) -> list[dict]:
             # authored CSS actually writes this.
         if re.search(r'pointer-events\s*:\s*none', _r15_body, re.IGNORECASE):
             continue  # toast/scrim: inert until a controlled state shows it
+        if _R15_STATE_SUBJECT_RE.search(_r15_sel):
+            continue  # opacity:0 inside an INTERACTION-STATE rule is not a rest
+            # state at all: the rest state is whatever the element declares
+            # outside this block, and an undeclared opacity is 1 by default.
+            #
+            # The rule previously treated every block containing opacity:0 as a
+            # candidate rest state regardless of its own pseudo-class, and
+            # :active/:disabled were absent from the state vocabulary entirely.
+            # Confirmed live: a neobrutalist theme whose whole press signature
+            # is "the keylined face slides onto its offset ink block and the
+            # block's opacity steps out" hard-stopped on 8 selectors, every one
+            # of them :active, :hover or :disabled, while those blocks' real
+            # rest state was the CSS default of fully visible -- one even
+            # carried an explicit `:focus-visible { opacity: 1 }` companion.
+            # The premise this rule is named for ("opacity:0 as a REST state")
+            # does not apply to a state rule, and hard-stopping correct work is
+            # worse than missing a finding.
+        if _r15_inert_elsewhere(_r15_sel):
+            continue  # the same element is declared pointer-events:none on a
+            # BASE rule and this block is an override of it, so the body-only
+            # check above could not see the escape hatch. Confirmed live on a
+            # glass theme's `.krm-pane__sweep:where(.device.ios *)`, an
+            # iOS-only override of a decorative specular band whose base rule
+            # three lines above carries `pointer-events: none`. Same lesson as
+            # the state check: judge the element, not one block of it.
         if _NATIVE_TOGGLE_SELECTOR_RE.search(_r15_sel):
             continue  # native or explicit-state show/hide primitive
         _r15_first_cls_m = _FIRST_CLASS_RE.search(_r15_sel)
