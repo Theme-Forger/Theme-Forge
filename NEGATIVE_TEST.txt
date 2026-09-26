@@ -1,0 +1,1 @@
+Gate test: this line mentions Accenture, a blocked pattern.
