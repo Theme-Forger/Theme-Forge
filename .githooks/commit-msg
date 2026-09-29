@@ -1,42 +1,75 @@
-#!/usr/bin/env bash
-# .githooks/commit-msg
-# Blocks commit messages containing blocked personal identifiers.
-# Fires for every commit: initial, amend, merge, squash, rebase fixup.
+#!/bin/sh
+# Block commit messages (and the commit identity) containing restricted identifiers.
+# Runs on: git commit, --amend, cherry-pick, merge, and rebase steps that create a
+# NEW message (reword/edit/-x). Plain `git rebase` reuses existing commit objects and
+# does NOT re-run this hook for picked commits — pre-push is the backstop for those.
 #
-# Pattern variable names are intentionally opaque.
-# Actual patterns live in .githooks/.blocked (gitignored, never committed).
+# Real patterns live in .githooks/.blocked (gitignored). This file carries only
+# opaque labels and loads the real patterns at runtime; absent .blocked => skip.
+#
+# Activate with: git config core.hooksPath .githooks
 
-set -euo pipefail
+BLOCKED_FILE="$(git rev-parse --show-toplevel 2>/dev/null)/.githooks/.blocked"
+MSG_FILE="$1"
 
-HOOKS_DIR="$(cd "$(dirname "$0")" && pwd)"
-MSG_FILE="${1:?commit-msg: missing message file argument}"
-BLOCKED_FILE="$HOOKS_DIR/.blocked"
+# BLOCKED_NAME_1 BLOCKED_NAME_2 BLOCKED_EMAIL BLOCKED_ORG BLOCKED_ORG_DOMAIN
 
-[[ ! -f "$BLOCKED_FILE" ]] && exit 0  # No patterns — skip silently.
+[ -f "$BLOCKED_FILE" ] || exit 0
 
-# Parse the same two opaque groups used by pre-commit.
-_section() {
-  local sec="$1"
-  awk -v s="$sec" '
-    /^\[/ { in_sec = (tolower($0) == "[" tolower(s) "]"); next }
-    in_sec && /^[[:space:]]*#/ { next }
-    in_sec && /^[[:space:]]*$/ { next }
-    in_sec { print }
-  ' "$BLOCKED_FILE"
-}
+FORBIDDEN=""
+while IFS= read -r line; do
+    line=$(printf '%s' "$line" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+    case "$line" in
+        ''|\#*) continue ;;
+    esac
+    if [ -z "$FORBIDDEN" ]; then
+        FORBIDDEN="$line"
+    else
+        FORBIDDEN="$FORBIDDEN|$line"
+    fi
+done < "$BLOCKED_FILE"
 
-P1=$(_section "names"       | paste -sd '|' - || true)
-P2=$(_section "identifiers" | paste -sd '|' - || true)
+[ -z "$FORBIDDEN" ] && exit 0
 
-_parts=()
-[[ -n "$P1" ]] && _parts+=("$P1")
-[[ -n "$P2" ]] && _parts+=("$P2")
-_COMBINED=$(IFS='|'; printf '%s' "${_parts[*]:-}")
-
-[[ -z "$_COMBINED" ]] && exit 0
-
-if grep -qiE "$_COMBINED" "$MSG_FILE"; then
-  printf '[commit-msg] BLOCKED: the commit message contains a blocked identifier.\n' >&2
-  printf '  Edit the message and retry:  git commit --edit\n' >&2
-  exit 1
+# Skip loudly on a malformed pattern rather than pass a leak through silently.
+printf '' | grep -qE "$FORBIDDEN" 2>/dev/null
+if [ "$?" -ge 2 ]; then
+    echo "[commit-msg] WARNING: .githooks/.blocked has an invalid pattern — check skipped." >&2
+    exit 0
 fi
+
+# 1. Commit message body
+if [ -f "$MSG_FILE" ] && grep -iqE "$FORBIDDEN" "$MSG_FILE"; then
+    echo "[commit-msg] BLOCKED: commit message contains a restricted identifier." >&2
+    echo "  Edit the message to remove it before committing." >&2
+    exit 1
+fi
+
+# 2. env identity (overrides git config)
+ENV_IDENTITY="${GIT_AUTHOR_NAME:-} ${GIT_AUTHOR_EMAIL:-} ${GIT_COMMITTER_NAME:-} ${GIT_COMMITTER_EMAIL:-}"
+if printf '%s' "$ENV_IDENTITY" | grep -iqE "$FORBIDDEN"; then
+    echo "[commit-msg] BLOCKED: a GIT_AUTHOR_*/GIT_COMMITTER_* env var contains a restricted identifier." >&2
+    echo "  Fix: unset GIT_AUTHOR_NAME GIT_AUTHOR_EMAIL GIT_COMMITTER_NAME GIT_COMMITTER_EMAIL" >&2
+    exit 1
+fi
+
+# 3. git config identity
+CFG_NAME="$(git config user.name 2>/dev/null || true)"
+CFG_EMAIL="$(git config user.email 2>/dev/null || true)"
+if printf '%s' "$CFG_NAME $CFG_EMAIL" | grep -iqE "$FORBIDDEN"; then
+    echo "[commit-msg] BLOCKED: git config user.name/user.email contains a restricted identifier." >&2
+    echo "  Fix: git config user.name 'Developer' && git config user.email 'you@users.noreply.github.com'" >&2
+    exit 1
+fi
+
+# 4. OS fallback — only when git config is unset
+if [ -z "$CFG_NAME" ] || [ -z "$CFG_EMAIL" ]; then
+    OS_IDENTITY="$(whoami 2>/dev/null || printf '%s' "${USERNAME:-}") $(hostname 2>/dev/null || printf '%s' "${COMPUTERNAME:-}") ${USERDOMAIN:-}"
+    if printf '%s' "$OS_IDENTITY" | grep -iqE "$FORBIDDEN"; then
+        echo "[commit-msg] BLOCKED: git config unset and the OS identity contains a restricted identifier." >&2
+        echo "  Fix: git config user.name 'Developer' && git config user.email 'you@users.noreply.github.com'" >&2
+        exit 1
+    fi
+fi
+
+exit 0
