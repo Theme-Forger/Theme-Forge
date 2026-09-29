@@ -1,33 +1,20 @@
-# .githooks/.blocked — personal identifier block list
-# ─────────────────────────────────────────────────────────────────────────────
-# This file is NOT committed (it is gitignored and never pushed).
-# Copy it:  cp .githooks/.blocked.example .githooks/.blocked
-# Then fill in your own patterns under each section.
+# Restricted-identifier block list — one grep BRE pattern per line.
+# Copy this file to .githooks/.blocked and replace the labels with real values.
+# .blocked is gitignored and never pushed; these hooks reveal nothing on their own.
 #
-# Format:
-#   [names]        — full-name variants (P1 group)
-#   [identifiers]  — username / email / domain / org (P2 group)
-#   • One grep -iE pattern per line  (case-insensitive at runtime)
-#   • Blank lines and lines starting with # are ignored
-#   • Escape dots:  john\.doe  not  john.doe
+# Groups (opaque labels — fill in on your machine only):
+#   BLOCKED_NAME_1        e.g. First Last
+#   BLOCKED_NAME_2        e.g. an alias/handle
+#   BLOCKED_EMAIL         e.g. you\.name@example\.com
+#   BLOCKED_ORG           e.g. YourEmployer
+#   BLOCKED_ORG_DOMAIN    e.g. employer\.com
 #
-# After creating the file, activate the hooks once per clone:
-#   git config core.hooksPath .githooks
-#
-# ─────────────────────────────────────────────────────────────────────────────
-
-[names]
-# Full name variants — matched against git identity metadata and staged content.
-# Replace the examples below with your own.
-#
-# Jane Doe
-# J Doe
-
-[identifiers]
-# Usernames, email addresses, email domains, and employer/org names.
-# Replace the examples below with your own.
-#
-# jane\.doe
-# jdoe_handle
-# employer\.com
-# EmployerName
+# Notes:
+#   - Escape regex metacharacters: '.' -> '\.'
+#   - Matching is case-insensitive (grep -i).
+#   - A bare org token (e.g. YourEmployer) already matches its domain substring.
+BLOCKED_NAME_1
+BLOCKED_NAME_2
+BLOCKED_EMAIL
+BLOCKED_ORG
+BLOCKED_ORG_DOMAIN
