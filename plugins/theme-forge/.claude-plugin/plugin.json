@@ -7,11 +7,7 @@
   "author": { "name": "Theme Forge" },
   "license": "MIT",
   "homepage": "https://github.com/Theme-Forger/Theme-Forge",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/Theme-Forger/Theme-Forge.git",
-    "directory": "plugins/theme-forge"
-  },
+  "repository": "https://github.com/Theme-Forger/Theme-Forge.git",
   "bugs": {
     "url": "https://github.com/Theme-Forger/Theme-Forge/issues"
   },
